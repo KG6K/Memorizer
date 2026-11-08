@@ -72,8 +72,8 @@ class SongRepository(private val context: Context) {
 
                     val rawTitle = cursor.getString(titleCol)?.takeIf { it.isNotBlank() }
                         ?: displayName.substringBeforeLast('.').ifBlank { "Audio Track" }
-                    val rawArtist = cursor.getString(artistCol)?.takeIf { it != "<unknown>" && it.isNotBlank() } ?: "Device Audio"
-                    val rawAlbum = cursor.getString(albumCol)?.takeIf { it != "<unknown>" && it.isNotBlank() } ?: "Local Music"
+                    val rawArtist = cursor.getString(artistCol)?.takeIf { it != "<unknown>" && it.isNotBlank() } ?: "Unknown Artist"
+                    val rawAlbum = cursor.getString(albumCol)?.takeIf { it != "<unknown>" && it.isNotBlank() } ?: ""
                     val duration = cursor.getLong(durationCol)
 
                     val folderName = if (filePath.isNotBlank()) {
@@ -106,28 +106,27 @@ class SongRepository(private val context: Context) {
     fun loadSongs(): List<LocalSong> {
         val rawJson = prefs.getString(KEY_SONGS, null)
         if (rawJson.isNullOrBlank()) {
-            val defaults = buildBuiltInSampleSongs()
-            saveSongs(defaults)
-            return defaults
+            return emptyList()
         }
         return try {
             val array = JSONArray(rawJson)
             val result = mutableListOf<LocalSong>()
+            var hadBuiltIn = false
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
-                result.add(parseSongJson(obj))
+                val song = parseSongJson(obj)
+                if (song.isBuiltInSample || song.id.startsWith("builtin_sample_")) {
+                    hadBuiltIn = true
+                } else {
+                    result.add(song)
+                }
             }
-            if (result.isEmpty()) {
-                val defaults = buildBuiltInSampleSongs()
-                saveSongs(defaults)
-                defaults
-            } else {
-                result
+            if (hadBuiltIn) {
+                saveSongs(result)
             }
+            result
         } catch (e: Exception) {
-            val defaults = buildBuiltInSampleSongs()
-            saveSongs(defaults)
-            defaults
+            emptyList()
         }
     }
 
@@ -402,11 +401,11 @@ class SongRepository(private val context: Context) {
 
         val fallbackTitle = displayName
             .substringBeforeLast('.')
-            .ifBlank { uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.') ?: "Local Audio Track" }
+            .ifBlank { uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.') ?: "Audio Track" }
 
         var title = fallbackTitle
-        var artist = "Local Device Audio"
-        var album = "Device Storage"
+        var artist = "Unknown Artist"
+        var album = ""
         var durationMs = 0L
 
         val retriever = MediaMetadataRetriever()
@@ -437,68 +436,12 @@ class SongRepository(private val context: Context) {
             durationMs = durationMs.coerceAtLeast(1000L),
             uriString = uri.toString(),
             isBuiltInSample = false,
-            folderName = folderName.ifBlank { "Imported Files" },
+            folderName = folderName.ifBlank { "Music" },
             lastPlayedAt = 0L
         )
     }
 
-    fun buildBuiltInSampleSongs(): List<LocalSong> {
-        val pkg = context.packageName
-        val now = System.currentTimeMillis()
-        val rawSamples = listOf(
-            Triple(
-                R.raw.sample_dawn_recitation,
-                "Fajr Cadence (Memorization Loop Sample)",
-                "Studio Acoustic Reference • 8 Phrases"
-            ),
-            Triple(
-                R.raw.sample_medina_chords,
-                "Hijaz Harmonic Etude (A–B Loop Sample)",
-                "Warm Resonance Studio • Melodic Loop"
-            ),
-            Triple(
-                R.raw.sample_acoustic_cadence,
-                "Saba Reflection Interval",
-                "Contemplative Audio Study • Clean Tone"
-            )
-        )
-
-        return rawSamples.mapIndexed { idx, (resId, title, artist) ->
-            val uri = Uri.parse("android.resource://$pkg/$resId")
-            val durationMs = measureUriDuration(uri).coerceAtLeast(8000L)
-            LocalSong(
-                id = "builtin_sample_${idx + 1}",
-                title = title,
-                artist = artist,
-                album = "Built-in Loop Studio Samples",
-                durationMs = durationMs,
-                uriString = uri.toString(),
-                isBuiltInSample = true,
-                folderName = "Built-in Studio Samples",
-                lastPlayedAt = now - idx * 3600000L,
-                savedLoopConfig = when (idx) {
-                    0 -> LoopConfig(repeatCount = 5, delaySeconds = 4, matchTrackDurationDelay = false)
-                    1 -> LoopConfig(repeatCount = 3, delaySeconds = 0, matchTrackDurationDelay = true)
-                    else -> LoopConfig(repeatCount = 4, delaySeconds = 3, matchTrackDurationDelay = false)
-                }
-            )
-        }
-    }
-
-    private fun measureUriDuration(uri: Uri): Long {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(context, uri)
-            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 9000L
-        } catch (_: Exception) {
-            9000L
-        } finally {
-            try {
-                retriever.release()
-            } catch (_: Exception) {
-            }
-        }
-    }
+    fun buildBuiltInSampleSongs(): List<LocalSong> = emptyList()
 
     private fun songToJson(song: LocalSong): JSONObject {
         return JSONObject().apply {
@@ -521,16 +464,20 @@ class SongRepository(private val context: Context) {
     private fun parseSongJson(obj: JSONObject): LocalSong {
         val loopObj = obj.optJSONObject("savedLoopConfig")
         val isSample = obj.optBoolean("isBuiltInSample", false)
+        val rawAlbum = obj.optString("album", "")
+        val cleanAlbum = if (rawAlbum == "Local Music" || rawAlbum == "Local Album" || rawAlbum == "Device Storage") "" else rawAlbum
+        val rawArtist = obj.optString("artist", "Unknown Artist")
+        val cleanArtist = if (rawArtist == "Device Audio" || rawArtist == "Local Device Audio" || rawArtist == "Local Artist") "Unknown Artist" else rawArtist
         return LocalSong(
             id = obj.optString("id", UUID.randomUUID().toString()),
             title = obj.optString("title", "Audio Track"),
-            artist = obj.optString("artist", "Local Artist"),
-            album = obj.optString("album", "Local Album"),
+            artist = cleanArtist,
+            album = cleanAlbum,
             durationMs = obj.optLong("durationMs", 9000L),
             uriString = obj.optString("uriString", ""),
             isBuiltInSample = isSample,
             addedAt = obj.optLong("addedAt", System.currentTimeMillis()),
-            folderName = obj.optString("folderName", if (isSample) "Built-in Studio Samples" else "Local Music"),
+            folderName = obj.optString("folderName", "Music"),
             lastPlayedAt = obj.optLong("lastPlayedAt", 0L),
             savedLoopConfig = loopObj?.let { parseLoopConfigJson(it) }
         )
@@ -569,45 +516,31 @@ class SongRepository(private val context: Context) {
     fun loadPlaylists(): List<Playlist> {
         val rawJson = prefs.getString(KEY_PLAYLISTS, null)
         if (rawJson.isNullOrBlank()) {
-            val defaults = listOf(
-                Playlist(
-                    id = "pl_memorization_drill",
-                    name = "Memorization Drill (5x)",
-                    description = "Focused Quranic & acoustic memorization loops with echo delays",
-                    songIds = listOf("builtin_sample_1", "builtin_sample_2"),
-                    lastPlayedAt = System.currentTimeMillis() - 1800000L
-                ),
-                Playlist(
-                    id = "pl_studio_favorites",
-                    name = "Studio Favorites",
-                    description = "Top rated loop exercises and vocal harmony études",
-                    songIds = listOf("builtin_sample_2", "builtin_sample_3"),
-                    lastPlayedAt = System.currentTimeMillis() - 7200000L
-                ),
-                Playlist(
-                    id = "pl_daily_review",
-                    name = "Daily Retention",
-                    description = "Repeated recitations for long-term memory",
-                    songIds = listOf("builtin_sample_1", "builtin_sample_3"),
-                    lastPlayedAt = System.currentTimeMillis() - 86400000L
-                )
-            )
-            savePlaylists(defaults)
-            return defaults
+            return emptyList()
         }
+        val builtInPlaylistIds = setOf("pl_memorization_drill", "pl_studio_favorites", "pl_daily_review")
         return try {
             val arr = JSONArray(rawJson)
             val list = mutableListOf<Playlist>()
+            var hadBuiltIn = false
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
+                val id = obj.optString("id", UUID.randomUUID().toString())
+                if (id in builtInPlaylistIds) {
+                    hadBuiltIn = true
+                    continue
+                }
                 val songIdsArr = obj.optJSONArray("songIds") ?: JSONArray()
                 val songIds = mutableListOf<String>()
                 for (j in 0 until songIdsArr.length()) {
-                    songIds.add(songIdsArr.getString(j))
+                    val sId = songIdsArr.getString(j)
+                    if (!sId.startsWith("builtin_sample_")) {
+                        songIds.add(sId)
+                    }
                 }
                 list.add(
                     Playlist(
-                        id = obj.optString("id", UUID.randomUUID().toString()),
+                        id = id,
                         name = obj.optString("name", "Playlist"),
                         description = obj.optString("description", ""),
                         songIds = songIds,
@@ -615,6 +548,9 @@ class SongRepository(private val context: Context) {
                         lastPlayedAt = obj.optLong("lastPlayedAt", 0L)
                     )
                 )
+            }
+            if (hadBuiltIn) {
+                savePlaylists(list)
             }
             list
         } catch (_: Exception) {
@@ -653,47 +589,23 @@ class SongRepository(private val context: Context) {
     fun loadHistory(): List<PlaybackHistoryItem> {
         val raw = prefs.getString(KEY_HISTORY, null)
         if (raw.isNullOrBlank()) {
-            val defaults = listOf(
-                PlaybackHistoryItem(
-                    id = "hist_1",
-                    songId = "builtin_sample_1",
-                    songTitle = "Fajr Cadence (Memorization Loop Sample)",
-                    artist = "Studio Acoustic Reference",
-                    folderName = "Built-in Studio Samples",
-                    playlistName = "Memorization Drill (5x)",
-                    playedAt = System.currentTimeMillis() - 600000L
-                ),
-                PlaybackHistoryItem(
-                    id = "hist_2",
-                    songId = "builtin_sample_2",
-                    songTitle = "Hijaz Harmonic Etude (A–B Loop Sample)",
-                    artist = "Warm Resonance Studio",
-                    folderName = "Built-in Studio Samples",
-                    playlistName = "Studio Favorites",
-                    playedAt = System.currentTimeMillis() - 7200000L
-                ),
-                PlaybackHistoryItem(
-                    id = "hist_3",
-                    songId = "builtin_sample_3",
-                    songTitle = "Saba Reflection Interval",
-                    artist = "Contemplative Audio Study",
-                    folderName = "Built-in Studio Samples",
-                    playlistName = "Daily Retention",
-                    playedAt = System.currentTimeMillis() - 86400000L
-                )
-            )
-            saveHistory(defaults)
-            return defaults
+            return emptyList()
         }
         return try {
             val arr = JSONArray(raw)
             val list = mutableListOf<PlaybackHistoryItem>()
+            var hadBuiltIn = false
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
+                val songId = obj.optString("songId", "")
+                if (songId.startsWith("builtin_sample_")) {
+                    hadBuiltIn = true
+                    continue
+                }
                 list.add(
                     PlaybackHistoryItem(
                         id = obj.optString("id", UUID.randomUUID().toString()),
-                        songId = obj.optString("songId", ""),
+                        songId = songId,
                         songTitle = obj.optString("songTitle", ""),
                         artist = obj.optString("artist", ""),
                         folderName = obj.optString("folderName", "Music"),
@@ -701,6 +613,9 @@ class SongRepository(private val context: Context) {
                         playedAt = obj.optLong("playedAt", System.currentTimeMillis())
                     )
                 )
+            }
+            if (hadBuiltIn) {
+                saveHistory(list)
             }
             list
         } catch (_: Exception) {

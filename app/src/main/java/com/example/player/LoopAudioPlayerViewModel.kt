@@ -46,7 +46,7 @@ data class PlayerUiState(
     val selectedTab: MainMenuTab = MainMenuTab.RECENT,
     val currentSong: LocalSong? = null,
     val currentPlaylistName: String = "All Songs",
-    val currentFolderName: String = "Built-in Studio Samples",
+    val currentFolderName: String = "",
     val loopConfig: LoopConfig = LoopConfig(),
     val phase: PlaybackPhase = PlaybackPhase.IDLE,
     val currentPositionMs: Long = 0L,
@@ -145,7 +145,7 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
                 playlists = initialPlaylists,
                 history = initialHistory,
                 currentSong = firstSong,
-                currentFolderName = firstSong?.folderName ?: "Built-in Studio Samples",
+                currentFolderName = firstSong?.folderName ?: "",
                 currentPlaylistName = "All Songs",
                 loopConfig = activeConfig,
                 trackDurationMs = firstSong?.durationMs ?: 0L,
@@ -168,14 +168,28 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
         viewModelScope.launch(Dispatchers.IO) {
             val scanned = repository.scanDeviceAudioMedia()
             if (scanned.isNotEmpty()) {
-                val currentSongs = _uiState.value.songs.toMutableList()
+                val currentSongs = _uiState.value.songs
+                    .filterNot { it.isBuiltInSample || it.id.startsWith("builtin_sample_") }
+                    .toMutableList()
                 val existingUris = currentSongs.map { it.uriString }.toSet()
                 val newItems = scanned.filter { it.uriString !in existingUris }
-                if (newItems.isNotEmpty()) {
+                if (newItems.isNotEmpty() || currentSongs.size != _uiState.value.songs.size) {
                     currentSongs.addAll(newItems)
                     repository.saveSongs(currentSongs)
                     withContext(Dispatchers.Main) {
-                        _uiState.update { it.copy(songs = currentSongs) }
+                        val shouldSelectFirst = _uiState.value.currentSong == null && currentSongs.isNotEmpty()
+                        val first = currentSongs.firstOrNull()
+                        _uiState.update {
+                            it.copy(
+                                songs = currentSongs,
+                                currentSong = it.currentSong ?: first,
+                                currentFolderName = if (it.currentFolderName.isBlank()) (first?.folderName ?: "") else it.currentFolderName,
+                                trackDurationMs = if (it.currentSong == null) (first?.durationMs ?: 0L) else it.trackDurationMs
+                            )
+                        }
+                        if (shouldSelectFirst && first != null) {
+                            prepareSongInternal(first, autoPlay = false, resetIteration = true)
+                        }
                     }
                 }
             }
@@ -230,11 +244,7 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
                 trackDurationMs = song.durationMs,
                 currentIteration = 1,
                 errorMessage = null,
-                statusBannerMessage = if (song.savedLoopConfig != null) {
-                    "Loaded saved loop settings for \"${song.title}\""
-                } else {
-                    null
-                }
+                statusBannerMessage = null
             )
         }
         repository.saveActiveLoopConfig(songConfig)
@@ -692,7 +702,7 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
                     it.copy(
                         phase = PlaybackPhase.COMPLETED_ALL_LOOPS,
                         currentPositionMs = startMs,
-                        statusBannerMessage = "Completed ${cfg.repeatCount}x loop session!"
+                        statusBannerMessage = null
                     )
                 }
             }
@@ -708,7 +718,7 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
                         it.copy(
                             phase = PlaybackPhase.COMPLETED_ALL_LOOPS,
                             currentPositionMs = cfg.sectionStartMs,
-                            statusBannerMessage = "Reached end of playlist after ${cfg.repeatCount}x loops."
+                            statusBannerMessage = null
                         )
                     }
                 }

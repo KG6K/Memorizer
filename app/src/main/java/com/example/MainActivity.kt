@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -191,54 +192,6 @@ fun LoopWavePlayerApp(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                // Banner for notification/errors
-                val bannerMessage = uiState.errorMessage ?: uiState.statusBannerMessage
-                AnimatedVisibility(visible = bannerMessage != null) {
-                    if (bannerMessage != null) {
-                        val isError = uiState.errorMessage != null
-                        Surface(
-                            color = if (isError) {
-                                MaterialTheme.colorScheme.errorContainer
-                            } else {
-                                MaterialTheme.colorScheme.secondaryContainer
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = bannerMessage,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (isError) {
-                                        MaterialTheme.colorScheme.onErrorContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onSecondaryContainer
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                IconButton(
-                                    onClick = viewModel::clearBannerMessages,
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Close,
-                                        contentDescription = "Dismiss notification",
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
                 // Active Menu Tab View
                 when (uiState.selectedTab) {
                     MainMenuTab.RECENT -> {
@@ -303,12 +256,15 @@ fun LoopWavePlayerApp(
             exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
         ) {
             Surface(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .navigationBarsPadding(),
+                modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.background
             ) {
-                Column(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()

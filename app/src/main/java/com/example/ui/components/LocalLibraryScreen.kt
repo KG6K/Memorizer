@@ -161,6 +161,7 @@ fun LocalLibraryScreen(
                     FilterChip(
                         selected = uiState.libraryFilter == filter,
                         onClick = { onFilterChange(filter) },
+                        border = null,
                         label = { Text(filter.label) },
                         modifier = Modifier.testTag("library_filter_${filter.name}")
                     )
@@ -267,15 +268,7 @@ private fun SongItemCard(
             containerColor = if (isCurrent) {
                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
             } else {
-                MaterialTheme.colorScheme.surface
-            }
-        ),
-        border = BorderStroke(
-            width = if (isCurrent) 1.5.dp else 1.dp,
-            color = if (isCurrent) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
             }
         )
     ) {

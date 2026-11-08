@@ -105,6 +105,7 @@ fun AlbumsSingersTabScreen(
                         viewMode = ArtistAlbumViewMode.SINGERS
                         expandedItemKey = null
                     },
+                    border = null,
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Filled.Mic,
@@ -122,6 +123,7 @@ fun AlbumsSingersTabScreen(
                         viewMode = ArtistAlbumViewMode.ALBUMS
                         expandedItemKey = null
                     },
+                    border = null,
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Filled.Album,
@@ -150,12 +152,8 @@ fun AlbumsSingersTabScreen(
                         containerColor = if (isCurrentArtist) {
                             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
                         } else {
-                            MaterialTheme.colorScheme.surface
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                         }
-                    ),
-                    border = BorderStroke(
-                        1.dp,
-                        if (isCurrentArtist) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
                     )
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -258,12 +256,8 @@ fun AlbumsSingersTabScreen(
                         containerColor = if (isCurrentAlbum) {
                             MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f)
                         } else {
-                            MaterialTheme.colorScheme.surface
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                         }
-                    ),
-                    border = BorderStroke(
-                        1.dp,
-                        if (isCurrentAlbum) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
                     )
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -417,7 +411,7 @@ private fun SongListSubSection(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "${formatDurationMillis(song.durationMs)} • Folder: ${song.folderName}",
+                            text = formatDurationMillis(song.durationMs),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,

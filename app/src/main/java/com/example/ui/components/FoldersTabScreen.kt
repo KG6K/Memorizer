@@ -217,12 +217,8 @@ private fun FolderGroupCard(
             containerColor = if (isCurrentFolder) {
                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
             } else {
-                MaterialTheme.colorScheme.surface
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
             }
-        ),
-        border = BorderStroke(
-            1.dp,
-            if (isCurrentFolder) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
         )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {

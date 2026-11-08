@@ -212,12 +212,8 @@ private fun PlaylistCardItem(
             containerColor = if (isCurrentPlaylist) {
                 MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f)
             } else {
-                MaterialTheme.colorScheme.surface
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
             }
-        ),
-        border = BorderStroke(
-            1.dp,
-            if (isCurrentPlaylist) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
         )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {

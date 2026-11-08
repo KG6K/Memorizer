@@ -260,10 +260,6 @@ private fun RecentFolderCard(
             } else {
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
             }
-        ),
-        border = BorderStroke(
-            1.dp,
-            if (isCurrent) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
         )
     ) {
         Column(
@@ -343,10 +339,6 @@ private fun RecentPlaylistCard(
             } else {
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
             }
-        ),
-        border = BorderStroke(
-            1.dp,
-            if (isCurrent) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
         )
     ) {
         Column(
@@ -431,12 +423,8 @@ private fun RecentSongItemCard(
             containerColor = if (isCurrent) {
                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
             } else {
-                MaterialTheme.colorScheme.surface
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
             }
-        ),
-        border = BorderStroke(
-            1.dp,
-            if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
         )
     ) {
         Row(
@@ -460,7 +448,6 @@ private fun RecentSongItemCard(
                         imageVector = when {
                             isPlaying -> Icons.Filled.GraphicEq
                             isCurrent -> Icons.Filled.PlayArrow
-                            song.isBuiltInSample -> Icons.Filled.LibraryMusic
                             else -> Icons.Filled.AudioFile
                         },
                         contentDescription = "Song status",
@@ -482,75 +469,19 @@ private fun RecentSongItemCard(
                     overflow = TextOverflow.Ellipsis
                 )
 
+                val metaText = buildList {
+                    if (song.artist.isNotBlank()) add(song.artist)
+                    if (song.album.isNotBlank()) add(song.album)
+                    add(formatDurationMillis(song.durationMs))
+                }.joinToString(" • ")
+
                 Text(
-                    text = "${song.artist} • ${song.album}",
+                    text = metaText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
-                        Text(
-                            text = formatDurationMillis(song.durationMs),
-                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                        )
-                    }
-
-                    Surface(
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = Modifier.weight(1f, fill = false)
-                    ) {
-                        Text(
-                            text = song.folderName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                        )
-                    }
-
-                    if (song.savedLoopConfig != null) {
-                        val loopCfg = song.savedLoopConfig
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Repeat,
-                                    contentDescription = "Loop",
-                                    modifier = Modifier.size(11.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = if (loopCfg.isInfinite) "∞ loop" else "${loopCfg.repeatCount}x • ${loopCfg.delaySeconds}s",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                            }
-                        }
-                    }
-                }
             }
 
             Box {

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -118,6 +119,7 @@ fun MainTopHeaderBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .statusBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -126,7 +128,6 @@ fun MainTopHeaderBar(
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(10.dp))
@@ -180,13 +181,13 @@ fun MainTopHeaderBar(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent
                 ),
                 textStyle = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp)
+                    .heightIn(min = 48.dp)
                     .testTag("top_search_bar")
             )
 
@@ -244,18 +245,8 @@ fun MainMenuTabsRow(
         ScrollableTabRow(
             selectedTabIndex = selectedTab.ordinal,
             edgePadding = 12.dp,
-            divider = {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-            },
-            indicator = { tabPositions ->
-                if (selectedTab.ordinal < tabPositions.size) {
-                    TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[selectedTab.ordinal]),
-                        height = 3.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            },
+            divider = {},
+            indicator = {},
             containerColor = MaterialTheme.colorScheme.surface
         ) {
             MainMenuTab.entries.forEach { tab ->
@@ -326,7 +317,6 @@ fun LastPlayingBottomBar(
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 8.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
         modifier = modifier
             .fillMaxWidth()
@@ -355,10 +345,8 @@ fun LastPlayingBottomBar(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
-                // Top Row: Song Artwork/Equalizer + Title + Artist + Transport Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -382,7 +370,7 @@ fun LastPlayingBottomBar(
 
                     Spacer(modifier = Modifier.width(10.dp))
 
-                    // Title & Artist
+                    // Title & Artist + Loop Status
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = song.title,
@@ -391,13 +379,33 @@ fun LastPlayingBottomBar(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Text(
-                            text = song.artist,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        val totalLoops = if (cfg.isInfinite) "∞" else cfg.repeatCount.toString()
+                        val loopText = if (uiState.phase == PlaybackPhase.WAITING_DELAY) {
+                            "Pause: ${formatDelayPreciseMillis(uiState.delayRemainingMs)}"
+                        } else {
+                            "Loop ${uiState.currentIteration}/$totalLoops"
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = song.artist,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Text(
+                                text = "• $loopText",
+                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(8.dp))
@@ -434,86 +442,6 @@ fun LastPlayingBottomBar(
                             )
                         }
                     }
-                }
-
-                // Bottom Row: Last Playing Folder & Playlist & Loop Info Badges
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // 1. Folder badge
-                    Surface(
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.weight(1f, fill = false)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Folder,
-                                contentDescription = "Folder",
-                                modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            Text(
-                                text = "Folder: ${uiState.currentFolderName}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    // 2. Playlist badge
-                    Surface(
-                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.85f),
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.weight(1f, fill = false)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
-                                contentDescription = "Playlist",
-                                modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                            Text(
-                                text = "Playlist: ${uiState.currentPlaylistName}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    // 3. Loop repetition info
-                    val totalLoops = if (cfg.isInfinite) "∞" else cfg.repeatCount.toString()
-                    val loopText = if (uiState.phase == PlaybackPhase.WAITING_DELAY) {
-                        "Pause: ${formatDelayPreciseMillis(uiState.delayRemainingMs)}"
-                    } else {
-                        "Loop ${uiState.currentIteration}/$totalLoops"
-                    }
-                    Text(
-                        text = loopText,
-                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
         }

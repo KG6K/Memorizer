@@ -1272,53 +1272,12 @@ private fun HeroNowPlayingCard(
                         .padding(14.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Top Row: Source Badge + Mode Switcher Tabs
+                    // Top Row: Mode Switcher Tab
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            color = if (song?.isBuiltInSample == false) {
-                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f)
-                            } else {
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
-                            },
-                            shape = RoundedCornerShape(50)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (song?.isBuiltInSample == false) Icons.Filled.AudioFile else Icons.Filled.LibraryMusic,
-                                    contentDescription = "Audio source type",
-                                    modifier = Modifier.size(14.dp),
-                                    tint = if (song?.isBuiltInSample == false) {
-                                        MaterialTheme.colorScheme.onSecondaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    }
-                                )
-                                Text(
-                                    text = if (song == null) {
-                                        "No Track Selected"
-                                    } else if (song.isBuiltInSample) {
-                                        "Studio Reference Track"
-                                    } else {
-                                        "Local Device Audio"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (song?.isBuiltInSample == false) {
-                                        MaterialTheme.colorScheme.onSecondaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    }
-                                )
-                            }
-                        }
-
                         // Window Flip Button: Tap or Swipe left to Equalizer
                         Surface(
                             onClick = { onSetShowEqualizer(true) },
@@ -1359,7 +1318,7 @@ private fun HeroNowPlayingCard(
                                 .clickable { onOpenLibraryTab() }
                         ) {
                             Text(
-                                text = song?.title ?: "Select a Local Song to Begin",
+                                text = song?.title ?: "Select a Song to Begin",
                                 style = MaterialTheme.typography.titleLarge,
                                 color = Color.White,
                                 maxLines = 2,
@@ -1368,8 +1327,10 @@ private fun HeroNowPlayingCard(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = song?.let { "${it.artist} • ${it.album}" }
-                                    ?: "Tap Import Songs to pick MP3, WAV, M4A, or OGG files",
+                                text = song?.let {
+                                    listOfNotNull(it.artist.takeIf { a -> a.isNotBlank() }, it.album.takeIf { al -> al.isNotBlank() })
+                                        .joinToString(" • ")
+                                } ?: "Tap to browse songs",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color(0xFFCBD5E1),
                                 maxLines = 1,
@@ -2019,34 +1980,6 @@ private fun TransportAndTimelineCard(
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.testTag("configured_delay_badge")
-                        )
-                    }
-                }
-            }
-
-            // Visual step pills for repetitions (up to 12 dots)
-            if (!cfg.isInfinite && cfg.repeatCount in 2..12) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    for (step in 1..cfg.repeatCount) {
-                        val isDone = step < uiState.currentIteration ||
-                            uiState.phase == PlaybackPhase.COMPLETED_ALL_LOOPS
-                        val isCurrent = step == uiState.currentIteration &&
-                            uiState.phase != PlaybackPhase.COMPLETED_ALL_LOOPS
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(
-                                    when {
-                                        isCurrent -> MaterialTheme.colorScheme.primary
-                                        isDone -> MaterialTheme.colorScheme.secondary
-                                        else -> MaterialTheme.colorScheme.surfaceVariant
-                                    }
-                                )
                         )
                     }
                 }
