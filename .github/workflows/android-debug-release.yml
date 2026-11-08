@@ -1,0 +1,123 @@
+name: Build & Release Signed Debug APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release-debug:
+    name: Build, Sign & Release Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+
+      - name: Restore Keystores
+        run: |
+          base64 -d debug.keystore.base64 > debug.keystore
+          base64 -d my-upload-key.jks.base64 > my-upload-key.jks
+
+      - name: Build Debug APK with Gradle
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+          STORE_PASSWORD: memorizer2026
+          KEY_PASSWORD: memorizer2026
+        run: |
+          gradle :app:assembleDebug --no-daemon
+
+      - name: Sign & Verify Debug APK
+        id: sign_apk
+        run: |
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
+          echo "Using apksigner: $APKSIGNER"
+
+          mkdir -p release-artifacts
+          cp app/build/outputs/apk/debug/app-debug.apk release-artifacts/Memorizer-v1.0-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk release-artifacts/Memorizer-v1.0-debug-signed.apk
+
+          "$APKSIGNER" sign \
+            --ks my-upload-key.jks \
+            --ks-key-alias upload \
+            --ks-pass pass:memorizer2026 \
+            --key-pass pass:memorizer2026 \
+            release-artifacts/Memorizer-v1.0-debug-signed.apk
+
+          CERT_INFO=$("$APKSIGNER" verify -v --print-certs release-artifacts/Memorizer-v1.0-debug-signed.apk | grep -v "^WARNING:")
+          echo "$CERT_INFO"
+
+          cd release-artifacts
+          sha256sum Memorizer-v1.0-debug-signed.apk Memorizer-v1.0-debug.apk > SHA256SUMS.txt
+          SIGNED_SHA256=$(sha256sum Memorizer-v1.0-debug-signed.apk | awk '{print $1}')
+          DEBUG_SHA256=$(sha256sum Memorizer-v1.0-debug.apk | awk '{print $1}')
+          SIGNED_SIZE=$(ls -lh Memorizer-v1.0-debug-signed.apk | awk '{print $5}')
+          SIGNED_BYTES=$(stat -c%s Memorizer-v1.0-debug-signed.apk)
+
+          cat <<EOF > RELEASE_NOTES.md
+          ## Memorizer v1.0 — Signed Debug Release (Build #${GITHUB_RUN_NUMBER})
+
+          Automated Android debug build and cryptographic signing completed via GitHub Actions.
+
+          ### Application Details
+          - **Application Name**: Memorizer
+          - **Package ID (`applicationId`)**: \`io.github.kg6k.memorizer\`
+          - **Version**: \`1.0\` (\`versionCode = 1\`)
+          - **Build Type**: \`debug\` (Signed with dedicated RSA-2048 release/upload key & Android debug key)
+          - **Min SDK / Target SDK / Compile SDK**: \`23\` / \`36\` / \`36.1\`
+          - **Commit SHA**: \`${GITHUB_SHA}\`
+
+          ### Artifacts & Checksums (SHA-256)
+          | File | Size | SHA-256 Checksum |
+          | :--- | :--- | :--- |
+          | \`Memorizer-v1.0-debug-signed.apk\` | ${SIGNED_SIZE} (${SIGNED_BYTES} bytes) | \`${SIGNED_SHA256}\` |
+          | \`Memorizer-v1.0-debug.apk\` | ${SIGNED_SIZE} | \`${DEBUG_SHA256}\` |
+
+          ### Signing Certificate Verification (\`apksigner verify -v --print-certs\`)
+          \`\`\`text
+          ${CERT_INFO}
+          \`\`\`
+          EOF
+
+      - name: Upload Build Artifacts to Workflow Run
+        uses: actions/upload-artifact@v4
+        with:
+          name: Memorizer-Debug-APK
+          path: |
+            release-artifacts/Memorizer-v1.0-debug-signed.apk
+            release-artifacts/Memorizer-v1.0-debug.apk
+            release-artifacts/SHA256SUMS.txt
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0-debug.${{ github.run_number }}
+          name: "Memorizer v1.0.0 Debug Release (Build #${{ github.run_number }})"
+          body_path: release-artifacts/RELEASE_NOTES.md
+          draft: false
+          prerelease: true
+          make_latest: true
+          files: |
+            release-artifacts/Memorizer-v1.0-debug-signed.apk
+            release-artifacts/Memorizer-v1.0-debug.apk
+            release-artifacts/SHA256SUMS.txt

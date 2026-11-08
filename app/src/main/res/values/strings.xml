@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">Memorizer</string>
+    <string name="subtitle_memorize_loop">Local Audio &amp; Memorization Loop Studio</string>
+    <string name="tab_now_playing">Studio Player</string>
+    <string name="tab_library">Local Songs</string>
+    <string name="tab_presets">Loop Presets</string>
+    <string name="btn_add_songs">Import Songs</string>
+    <string name="btn_add_folder">Scan Folder</string>
+    <string name="label_repeat_count">Song Repeat Count</string>
+    <string name="label_delay_between_loops">Delay Between Loops</string>
+    <string name="label_match_duration">Match Track Duration (Echo Mode)</string>
+    <string name="label_ab_section">A–B Section Loop</string>
+    <string name="label_playback_speed">Playback Speed</string>
+    <string name="label_after_loop_action">When All Loops Complete</string>
+    <string name="btn_skip_delay">Play Next Repetition Now</string>
+    <string name="btn_reset_loop_progress">Reset Loop Counter</string>
+    <string name="empty_library_title">No Local Songs Match Filter</string>
+    <string name="empty_library_hint">Tap Import Songs to pick MP3, WAV, M4A, or OGG files from your device storage.</string>
+</resources>

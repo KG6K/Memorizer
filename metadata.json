@@ -1,0 +1,8 @@
+{
+  "name": "Memorizer",
+  "description": "A Material UI music player with folders, playlists, recent playback tracking, and memorization looping.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
