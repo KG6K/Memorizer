@@ -74,18 +74,38 @@ import com.example.ui.components.StudioPlayerScreen
 import com.example.ui.theme.AppThemeSetting
 import com.example.ui.theme.MyApplicationTheme
 
+import android.media.AudioManager
+import android.view.KeyEvent
+import androidx.activity.viewModels
+
 class MainActivity : ComponentActivity() {
+    private val playerViewModel: LoopAudioPlayerViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        volumeControlStream = AudioManager.STREAM_MUSIC
         enableEdgeToEdge()
         setContent {
             var themeSetting by rememberSaveable { mutableStateOf(AppThemeSetting.SYSTEM) }
             MyApplicationTheme(themeSetting = themeSetting) {
                 LoopWavePlayerApp(
                     themeSetting = themeSetting,
-                    onSelectThemeSetting = { themeSetting = it }
+                    onSelectThemeSetting = { themeSetting = it },
+                    viewModel = playerViewModel
                 )
             }
+        }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> {
+                playerViewModel.handleHardwareVolumeKey(isVolumeUp = true)
+            }
+            KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                playerViewModel.handleHardwareVolumeKey(isVolumeUp = false)
+            }
+            else -> super.onKeyDown(keyCode, event)
         }
     }
 }
@@ -152,7 +172,7 @@ fun LoopWavePlayerApp(
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            contentWindowInsets = WindowInsets.safeDrawing,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     // Top Bar: App Logo at top left, Search bar in middle, History & Settings buttons at top right
@@ -165,10 +185,7 @@ fun LoopWavePlayerApp(
                     )
 
                     // Menu Row below the top bar:
-                    // 1st: Recent (recent playing folder, songs, playlist)
-                    // 2nd: Folders (folders which contain songs)
-                    // 3rd: Albums / Singers (albums or singers)
-                    // 4th: Playlists (playlists)
+                    // 1st: Recent, 2nd: Folders, 3rd: Albums, 4th: Playlists
                     MainMenuTabsRow(
                         selectedTab = uiState.selectedTab,
                         onTabSelected = viewModel::setSelectedTab
@@ -191,6 +208,13 @@ fun LoopWavePlayerApp(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .then(
+                        if (uiState.currentSong == null) {
+                            Modifier.navigationBarsPadding()
+                        } else {
+                            Modifier
+                        }
+                    )
             ) {
                 // Active Menu Tab View
                 when (uiState.selectedTab) {
@@ -216,7 +240,8 @@ fun LoopWavePlayerApp(
                             onPlayFolder = viewModel::playFolder,
                             onToggleExpandFolder = viewModel::setExpandedFolder,
                             onAddToPlaylistClick = { song -> songToAddToPlaylist = song },
-                            onOpenStudioPlayer = { isStudioPlayerOpen = true }
+                            onOpenStudioPlayer = { isStudioPlayerOpen = true },
+                            onPlaySelectedSongs = viewModel::playSelectedSongs
                         )
                     }
 
@@ -227,7 +252,8 @@ fun LoopWavePlayerApp(
                                 viewModel.selectSong(song, playlistName = playlistName, folderName = folderName, autoPlay = true)
                             },
                             onAddToPlaylistClick = { song -> songToAddToPlaylist = song },
-                            onOpenStudioPlayer = { isStudioPlayerOpen = true }
+                            onOpenStudioPlayer = { isStudioPlayerOpen = true },
+                            onPlaySelectedSongs = viewModel::playSelectedSongs
                         )
                     }
 
@@ -239,10 +265,12 @@ fun LoopWavePlayerApp(
                             },
                             onPlayPlaylist = viewModel::playPlaylist,
                             onCreatePlaylistClick = { showCreatePlaylistDialog = true },
+                            onAddSongsToPlaylist = viewModel::addSongsToPlaylist,
                             onRemoveSongFromPlaylist = viewModel::removeSongFromPlaylist,
                             onDeletePlaylist = viewModel::deletePlaylist,
                             onToggleExpandPlaylist = viewModel::setExpandedPlaylist,
-                            onOpenStudioPlayer = { isStudioPlayerOpen = true }
+                            onOpenStudioPlayer = { isStudioPlayerOpen = true },
+                            onPlaySelectedSongs = viewModel::playSelectedSongs
                         )
                     }
                 }
@@ -265,26 +293,6 @@ fun LoopWavePlayerApp(
                         .statusBarsPadding()
                         .navigationBarsPadding()
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Studio Memorization Looper",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        IconButton(onClick = { isStudioPlayerOpen = false }) {
-                            Icon(
-                                imageVector = Icons.Filled.Close,
-                                contentDescription = "Close studio player"
-                            )
-                        }
-                    }
-
                     StudioPlayerScreen(
                         uiState = uiState,
                         onTogglePlayPause = viewModel::togglePlayPause,
@@ -321,7 +329,10 @@ fun LoopWavePlayerApp(
                         onSetEqualizerPreset = viewModel::setEqualizerPreset,
                         onSetBassBoostStrength = viewModel::setBassBoostStrength,
                         onSetVirtualizerStrength = viewModel::setVirtualizerStrength,
-                        onSetShowEqualizer = viewModel::setShowEqualizer
+                        onSetShowEqualizer = viewModel::setShowEqualizer,
+                        onSetSleepTimer = viewModel::setSleepTimer,
+                        onCancelSleepTimer = viewModel::cancelSleepTimer,
+                        onClosePlayer = { isStudioPlayerOpen = false }
                     )
                 }
             }
@@ -365,9 +376,10 @@ fun LoopWavePlayerApp(
     // Create Playlist Dialog
     if (showCreatePlaylistDialog) {
         CreatePlaylistDialog(
+            availableSongs = uiState.songs,
             onDismiss = { showCreatePlaylistDialog = false },
-            onConfirm = { name, desc ->
-                viewModel.createPlaylist(name, desc)
+            onConfirm = { name, desc, selectedSongIds ->
+                viewModel.createPlaylist(name, desc, selectedSongIds)
                 showCreatePlaylistDialog = false
             }
         )

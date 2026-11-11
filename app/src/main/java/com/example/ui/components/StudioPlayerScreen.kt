@@ -1,34 +1,33 @@
 package com.example.ui.components
 
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,103 +36,89 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material.icons.filled.AudioFile
-import androidx.compose.material.icons.filled.BookmarkAdded
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.HourglassTop
-import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
-import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeMute
-import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.outlined.Remove
-import com.example.model.EqualizerBand
-import com.example.model.EqualizerState
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.example.R
 import com.example.model.AfterLoopAction
 import com.example.model.PlaybackPhase
 import com.example.player.PlayerUiState
 import com.example.player.formatDelayPreciseMillis
 import com.example.player.formatDurationMillis
+import com.example.player.formatSleepTimerMillis
 import com.example.ui.theme.JetBrainsMonoFamily
-import kotlin.math.sin
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -169,107 +154,359 @@ fun StudioPlayerScreen(
     onSetBassBoostStrength: (Int) -> Unit = {},
     onSetVirtualizerStrength: (Int) -> Unit = {},
     onSetShowEqualizer: (Boolean) -> Unit = {},
+    onSetSleepTimer: (hours: Int, minutes: Int) -> Unit = { _, _ -> },
+    onCancelSleepTimer: () -> Unit = {},
+    onClosePlayer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isVolumeGestureActive by remember { mutableStateOf(false) }
     var hideVolumeJob by remember { mutableStateOf<Job?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
+    var showTopMenu by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRepeatDialog by remember { mutableStateOf(false) }
     var showDelayDialog by remember { mutableStateOf(false) }
-    var showAbDialog by remember { mutableStateOf(false) }
-    var showPresetsDialog by remember { mutableStateOf(false) }
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
 
-    val scrollState = rememberScrollState()
     val cfg = uiState.loopConfig
+    val song = uiState.currentSong
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragStart = { offset ->
-                        // Only activate right-side gesture if touch is on right 50% of the player window (like VLC Player)
-                        if (offset.x > size.width * 0.45f) {
-                            hideVolumeJob?.cancel()
-                            isVolumeGestureActive = true
-                        }
-                    },
-                    onDragEnd = {
-                        hideVolumeJob = coroutineScope.launch {
-                            delay(800)
-                            isVolumeGestureActive = false
-                        }
-                    },
-                    onDragCancel = {
-                        hideVolumeJob = coroutineScope.launch {
-                            delay(400)
-                            isVolumeGestureActive = false
-                        }
-                    },
-                    onVerticalDrag = { change, dragAmount ->
-                        if (change.position.x > size.width * 0.45f) {
-                            change.consume()
-                            hideVolumeJob?.cancel()
-                            isVolumeGestureActive = true
-                            // Dragging UP is negative dragAmount (increases volume), DOWN is positive (decreases volume)
-                            val deltaPercent = (-dragAmount / 3.2f).toInt()
-                            if (deltaPercent != 0) {
-                                val newVol = (uiState.volumePercent + deltaPercent).coerceIn(0, 200)
-                                if (newVol != uiState.volumePercent) {
-                                    onSetVolumePercent(newVol)
+            .pointerInput(uiState.isShowingEqualizer) {
+                if (!uiState.isShowingEqualizer) {
+                    detectVerticalDragGestures(
+                        onDragStart = { offset ->
+                            if (offset.x > size.width * 0.45f) {
+                                hideVolumeJob?.cancel()
+                                isVolumeGestureActive = true
+                            }
+                        },
+                        onDragEnd = {
+                            hideVolumeJob = coroutineScope.launch {
+                                delay(800)
+                                isVolumeGestureActive = false
+                            }
+                        },
+                        onDragCancel = {
+                            hideVolumeJob = coroutineScope.launch {
+                                delay(400)
+                                isVolumeGestureActive = false
+                            }
+                        },
+                        onVerticalDrag = { change, dragAmount ->
+                            if (change.position.x > size.width * 0.45f) {
+                                change.consume()
+                                hideVolumeJob?.cancel()
+                                isVolumeGestureActive = true
+                                val deltaPercent = (-dragAmount / 3.2f).toInt()
+                                if (deltaPercent != 0) {
+                                    val newVol = (uiState.volumePercent + deltaPercent).coerceIn(0, 200)
+                                    if (newVol != uiState.volumePercent) {
+                                        onSetVolumePercent(newVol)
+                                    }
                                 }
                             }
                         }
-                    }
-                )
+                    )
+                }
             }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .widthIn(max = 600.dp)
+                .align(Alignment.Center)
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
+            // 1. Top Header Bar (Clean single-inset alignment below status bar)
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .widthIn(max = 680.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .height(48.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. Hero Song Picture + Swipe Left Equalizer in the same window!
-                HeroNowPlayingCard(
+                IconButton(
+                    onClick = onClosePlayer,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .testTag("close_studio_player_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Close studio player"
+                    )
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (uiState.sleepTimerRemainingMs > 0L) {
+                        Surface(
+                            onClick = { showSleepTimerDialog = true },
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(50),
+                            modifier = Modifier.testTag("active_sleep_timer_badge")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Bedtime,
+                                    contentDescription = "Sleep Timer Active",
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = formatSleepTimerMillis(uiState.sleepTimerRemainingMs),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                    }
+
+                    Box {
+                        IconButton(
+                            onClick = { showTopMenu = true },
+                            modifier = Modifier
+                                .size(44.dp)
+                                .testTag("player_top_more_menu_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.MoreVert,
+                                contentDescription = "More player options"
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showTopMenu,
+                            onDismissRequest = { showTopMenu = false },
+                            shape = RoundedCornerShape(20.dp),
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Equalizer", fontWeight = FontWeight.Medium) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Filled.Equalizer,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                trailingIcon = if (uiState.isShowingEqualizer) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Filled.Check,
+                                            contentDescription = "Active",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                } else null,
+                                onClick = {
+                                    showTopMenu = false
+                                    onSetShowEqualizer(!uiState.isShowingEqualizer)
+                                },
+                                modifier = Modifier.testTag("menu_item_equalizer")
+                            )
+
+                            DropdownMenuItem(
+                                text = { Text("Playback Speed", fontWeight = FontWeight.Medium) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Filled.Speed,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                trailingIcon = {
+                                    Text(
+                                        text = "${cfg.playbackSpeed}x",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                },
+                                onClick = {
+                                    showTopMenu = false
+                                    showSpeedDialog = true
+                                },
+                                modifier = Modifier.testTag("menu_item_playback_speed")
+                            )
+
+                            DropdownMenuItem(
+                                text = { Text("Sleep Timer", fontWeight = FontWeight.Medium) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Filled.Bedtime,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                trailingIcon = {
+                                    Text(
+                                        text = if (uiState.sleepTimerRemainingMs > 0L) {
+                                            formatSleepTimerMillis(uiState.sleepTimerRemainingMs)
+                                        } else {
+                                            "Off"
+                                        },
+                                        style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
+                                        color = if (uiState.sleepTimerRemainingMs > 0L) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        fontWeight = if (uiState.sleepTimerRemainingMs > 0L) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                onClick = {
+                                    showTopMenu = false
+                                    showSleepTimerDialog = true
+                                },
+                                modifier = Modifier.testTag("menu_item_sleep_timer")
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2. Vertically Centered 1:1 Square Song Picture / Equalizer Zone (Never overlaps header or metadata)
+            BoxWithConstraints(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val squareSize = minOf(maxWidth, maxHeight)
+                SquareSongPictureAndEqualizerCard(
                     uiState = uiState,
-                    onPickAudioFiles = onPickAudioFiles,
-                    onOpenLibraryTab = onOpenLibraryTab,
                     onSetShowEqualizer = onSetShowEqualizer,
                     onSetVolumePercent = onSetVolumePercent,
                     onSetEqualizerEnabled = onSetEqualizerEnabled,
                     onSetEqualizerBandLevel = onSetEqualizerBandLevel,
                     onSetEqualizerPreset = onSetEqualizerPreset,
-                    onSetBassBoostStrength = onSetBassBoostStrength,
-                    onSetVirtualizerStrength = onSetVirtualizerStrength
+                    modifier = Modifier.size(squareSize)
                 )
+            }
 
-                // 2. Live Delay Countdown Overlay Card (visible when waiting between loops)
-                AnimatedVisibility(
-                    visible = uiState.phase == PlaybackPhase.WAITING_DELAY,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
+            // 3. Bottom-Anchored Metadata & Controls Section (Fixed height so square thumbnail position NEVER changes)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Full-Width Track Metadata & Current Repetition Badge Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onOpenLibraryTab() }
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    DelayCountdownBanner(
-                        uiState = uiState,
-                        onSkipDelayNow = onSkipDelayNow,
-                        onTogglePauseDelay = onTogglePlayPause,
-                        onAddExtraDelay = onAddExtraDelay
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = song?.title ?: "Select a Song to Begin",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("now_playing_title")
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = song?.let {
+                                listOfNotNull(
+                                    it.artist.takeIf { a -> a.isNotBlank() },
+                                    it.album.takeIf { al -> al.isNotBlank() }
+                                ).joinToString(" • ")
+                            } ?: "Tap to browse songs",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (cfg.isInfinite) Icons.Filled.AllInclusive else Icons.Filled.RepeatOne,
+                                contentDescription = "Current loop iteration",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            val loopStatusText = if (cfg.isInfinite) {
+                                "Rep ${uiState.currentIteration} / ∞"
+                            } else {
+                                "Rep ${uiState.currentIteration} / ${cfg.repeatCount}"
+                            }
+                            Text(
+                                text = loopStatusText,
+                                style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.testTag("repetition_counter_badge")
+                            )
+                        }
+                    }
                 }
 
-                // 3. Repetition Status + Timeline + Transport Card
-                TransportAndTimelineCard(
+                // Fixed-height single-line slot for Pause Delay progress bar (prevents any layout shift)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(26.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (uiState.phase == PlaybackPhase.WAITING_DELAY) {
+                        DelayCountdownBanner(
+                            uiState = uiState,
+                            onSkipDelayNow = onSkipDelayNow,
+                            onTogglePauseDelay = onTogglePlayPause,
+                            onAddExtraDelay = onAddExtraDelay
+                        )
+                    }
+                }
+
+                // Repeat, Pause Delay, and Loop Mode Pills Row above the bottom controls
+                LooperQuickActionsRow(
+                    loopConfig = cfg,
+                    onOpenRepeatDialog = { showRepeatDialog = true },
+                    onOpenDelayDialog = { showDelayDialog = true },
+                    onSetAfterLoopAction = onSetAfterLoopAction
+                )
+
+                // Timeline LineSlider + Time & Mode Row + Bottom Transport Buttons
+                BottomTransportAndTimelineSection(
                     uiState = uiState,
                     onTogglePlayPause = onTogglePlayPause,
                     onSeekTo = onSeekTo,
@@ -277,33 +514,12 @@ fun StudioPlayerScreen(
                     onSkipForward = onSkipForward,
                     onPreviousSong = onPreviousSong,
                     onNextSong = onNextSong,
-                    onResetLoopProgress = onResetLoopProgress,
-                    onMarkSectionStart = onMarkSectionStart,
-                    onMarkSectionEnd = onMarkSectionEnd,
-                    onClearAbSection = onClearAbSection
+                    onSetAfterLoopAction = onSetAfterLoopAction
                 )
-
-                // 4. CLEAN Looper Quick Action Pills (Speed, Repeat, Delay, Presets popups)
-                LooperQuickActionsRow(
-                    loopConfig = cfg,
-                    onOpenSpeedDialog = { showSpeedDialog = true },
-                    onOpenRepeatDialog = { showRepeatDialog = true },
-                    onOpenDelayDialog = { showDelayDialog = true },
-                    onOpenPresetsDialog = { showPresetsDialog = true }
-                )
-
-                // 5. Clean Track Options Row (Save for track, reset progress)
-                CleanTrackOptionsRow(
-                    hasSavedConfig = uiState.currentSong?.savedLoopConfig != null,
-                    onSaveConfigToSong = onSaveConfigToSong,
-                    onResetLoopProgress = onResetLoopProgress
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
             }
         }
 
-        // Floating VLC Volume HUD Overlay that ONLY appears while swiping right side!
+        // Floating Volume HUD Overlay that ONLY appears while swiping right side
         AnimatedVisibility(
             visible = isVolumeGestureActive,
             enter = fadeIn() + scaleIn(initialScale = 0.85f),
@@ -316,7 +532,7 @@ fun StudioPlayerScreen(
         }
     }
 
-    // Modal Dialogs for Clean UI:
+    // Modal Dialogs
     if (showSpeedDialog) {
         PlaybackSpeedDialog(
             currentSpeed = cfg.playbackSpeed,
@@ -343,302 +559,747 @@ fun StudioPlayerScreen(
         )
     }
 
-    if (showPresetsDialog) {
-        PresetsDialog(
-            presets = uiState.presets,
-            onSelectPreset = { preset ->
-                onSetRepeatCount(preset.repeatCount)
-                onSetDelaySeconds(preset.delaySeconds)
-                onSetMatchTrackDuration(preset.matchTrackDurationDelay)
-                onSetPlaybackSpeed(preset.playbackSpeed)
-                onSetAfterLoopAction(preset.afterCompletionAction)
-            },
-            onDismiss = { showPresetsDialog = false }
+    if (showSleepTimerDialog) {
+        SleepTimerDialog(
+            remainingMs = uiState.sleepTimerRemainingMs,
+            onSetSleepTimer = onSetSleepTimer,
+            onCancelSleepTimer = onCancelSleepTimer,
+            onDismiss = { showSleepTimerDialog = false }
         )
     }
 }
 
 /**
- * Clean looper action pills row: Speed, Repeat, Pause Delay, Presets.
- * Locked to 4 equal-width columns (Modifier.weight(1f).height(52.dp)) so changing values NEVER resizes buttons.
+ * Classic thin horizontal Line Slider with continuous 2dp track line, active line, and compact circular thumb.
+ */
+@Composable
+fun LineSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    activeColor: Color = MaterialTheme.colorScheme.primary,
+    inactiveColor: Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f),
+    thumbColor: Color = activeColor,
+    trackThickness: Dp = 2.dp,
+    thumbRadius: Dp = 6.dp
+) {
+    val rangeSpan = (valueRange.endInclusive - valueRange.start).takeIf { it > 0f } ?: 1f
+    val fraction = ((value - valueRange.start) / rangeSpan).coerceIn(0f, 1f)
+
+    Box(
+        modifier = modifier
+            .height(28.dp)
+            .pointerInput(valueRange.start, valueRange.endInclusive) {
+                detectTapGestures { offset ->
+                    val widthPx = size.width.toFloat().coerceAtLeast(1f)
+                    val tapRatio = (offset.x / widthPx).coerceIn(0f, 1f)
+                    val newVal = valueRange.start + tapRatio * (valueRange.endInclusive - valueRange.start)
+                    onValueChange(newVal)
+                }
+            }
+            .pointerInput(valueRange.start, valueRange.endInclusive) {
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        val widthPx = size.width.toFloat().coerceAtLeast(1f)
+                        val dragRatio = (offset.x / widthPx).coerceIn(0f, 1f)
+                        val newVal = valueRange.start + dragRatio * (valueRange.endInclusive - valueRange.start)
+                        onValueChange(newVal)
+                    },
+                    onHorizontalDrag = { change, _ ->
+                        change.consume()
+                        val widthPx = size.width.toFloat().coerceAtLeast(1f)
+                        val dragRatio = (change.position.x / widthPx).coerceIn(0f, 1f)
+                        val newVal = valueRange.start + dragRatio * (valueRange.endInclusive - valueRange.start)
+                        onValueChange(newVal)
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val radiusPx = thumbRadius.toPx()
+            val strokePx = trackThickness.toPx()
+            val startX = radiusPx
+            val endX = (size.width - radiusPx).coerceAtLeast(startX)
+            val usableWidth = (endX - startX).coerceAtLeast(0f)
+            val centerY = size.height / 2f
+            val thumbX = startX + fraction * usableWidth
+
+            // Inactive continuous thin line
+            drawLine(
+                color = inactiveColor,
+                start = Offset(startX, centerY),
+                end = Offset(endX, centerY),
+                strokeWidth = strokePx,
+                cap = StrokeCap.Round
+            )
+
+            // Active thin line
+            drawLine(
+                color = activeColor,
+                start = Offset(startX, centerY),
+                end = Offset(thumbX, centerY),
+                strokeWidth = strokePx * 1.25f,
+                cap = StrokeCap.Round
+            )
+
+            // Thumb circle
+            drawCircle(
+                color = thumbColor,
+                radius = radiusPx,
+                center = Offset(thumbX, centerY)
+            )
+        }
+    }
+}
+
+/**
+ * 1:1 Square Song Picture & Equalizer Card.
+ * Displays embedded artwork from the song (or blank surface if none), and flips to the 5-Band Equalizer.
+ */
+@Composable
+private fun SquareSongPictureAndEqualizerCard(
+    uiState: PlayerUiState,
+    onSetShowEqualizer: (Boolean) -> Unit,
+    onSetVolumePercent: (Int) -> Unit,
+    onSetEqualizerEnabled: (Boolean) -> Unit,
+    onSetEqualizerBandLevel: (Short, Short) -> Unit,
+    onSetEqualizerPreset: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val song = uiState.currentSong
+    val eqState = uiState.equalizerState
+    val isShowingEq = uiState.isShowingEqualizer
+
+    // Load embedded album art picture from the song file; null if the song has no embedded picture
+    val embeddedArtwork by produceState<ImageBitmap?>(initialValue = null, key1 = song?.uriString) {
+        val uriStr = song?.uriString
+        if (uriStr.isNullOrBlank() || song.isBuiltInSample || uriStr.endsWith(".wav", ignoreCase = true)) {
+            value = null
+            return@produceState
+        }
+        value = withContext(Dispatchers.IO) {
+            val uri = Uri.parse(uriStr)
+
+            // 1. For MediaStore content:// URIs on Android 10+, use ContentResolver.loadThumbnail (no JNI error if absent)
+            if (uri.scheme == "content" && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                val thumb = runCatching {
+                    context.contentResolver.loadThumbnail(uri, android.util.Size(512, 512), null)?.asImageBitmap()
+                }.getOrNull()
+                if (thumb != null) return@withContext thumb
+            }
+
+            // 2. Check stream header for embedded cover art tags (ID3 APIC / MP4 covr / FLAC picture) before calling JNI getEmbeddedPicture
+            val hasEmbeddedPictureTag = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val buffer = ByteArray(65536)
+                    val bytesRead = stream.read(buffer)
+                    if (bytesRead <= 0) {
+                        false
+                    } else {
+                        val headerText = String(buffer, 0, bytesRead, Charsets.ISO_8859_1)
+                        headerText.contains("APIC") || headerText.contains("covr") || headerText.contains("image/jpeg") || headerText.contains("image/png")
+                    }
+                } ?: false
+            }.getOrDefault(false)
+
+            if (!hasEmbeddedPictureTag) {
+                return@withContext null
+            }
+
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, uri)
+                val bytes = retriever.embeddedPicture
+                if (bytes != null && bytes.isNotEmpty()) {
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                } else {
+                    null
+                }
+            } catch (_: Exception) {
+                null
+            } finally {
+                try {
+                    retriever.release()
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
+    Card(
+        modifier = modifier
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { _, dragAmount ->
+                    if (dragAmount < -25f) {
+                        onSetShowEqualizer(true)
+                    } else if (dragAmount > 25f) {
+                        onSetShowEqualizer(false)
+                    }
+                }
+            }
+            .testTag("hero_now_playing_card"),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val isCompactSquare = maxHeight < 250.dp
+            if (!isShowingEq) {
+                // --- VIEW 1: SQUARE SONG PICTURE FROM TRACK METADATA (Or music logo if song has no picture) ---
+                val art = embeddedArtwork
+                if (art != null) {
+                    Image(
+                        bitmap = art,
+                        contentDescription = "Song picture",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                            shape = CircleShape,
+                            modifier = Modifier.size(if (isCompactSquare) 110.dp else 160.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Filled.MusicNote,
+                                    contentDescription = "Music logo",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(if (isCompactSquare) 64.dp else 96.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                // --- VIEW 2: 5-BAND VERTICAL LINE EQUALIZER + 200% SYSTEM-SYNCED LINE VOLUME SLIDER ---
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(
+                            horizontal = if (isCompactSquare) 10.dp else 14.dp,
+                            vertical = if (isCompactSquare) 6.dp else 10.dp
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(if (isCompactSquare) 4.dp else 6.dp)
+                ) {
+                    // Top Row of Equalizer Window (No "Equalizer ON" text — clean switch only)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(if (isCompactSquare) 30.dp else 36.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            onClick = { onSetShowEqualizer(false) },
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = CircleShape,
+                            modifier = Modifier
+                                .size(if (isCompactSquare) 30.dp else 34.dp)
+                                .testTag("switch_to_artwork_tab")
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Filled.AudioFile,
+                                    contentDescription = "Back to song picture",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = eqState.isEnabled,
+                            onCheckedChange = onSetEqualizerEnabled
+                        )
+                    }
+
+                    // Equalizer Presets Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        eqState.presets.forEach { preset ->
+                            val isSel = eqState.currentPreset == preset
+                            FilterChip(
+                                selected = isSel,
+                                onClick = { onSetEqualizerPreset(preset) },
+                                label = {
+                                    Text(
+                                        text = preset,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                },
+                                border = null,
+                                modifier = Modifier.height(if (isCompactSquare) 24.dp else 28.dp)
+                            )
+                        }
+                    }
+
+                    // 5 Vertical Line Sliders for Equalizer Bands
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        eqState.bands.forEach { band ->
+                            val gainDb = band.levelMb / 100 // -15 to +15 dB
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = if (gainDb > 0) "+$gainDb" else "$gainDb",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    color = if (gainDb != 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                VerticalEqBandLineSlider(
+                                    levelMb = band.levelMb,
+                                    minLevelMb = band.minLevelMb,
+                                    maxLevelMb = band.maxLevelMb,
+                                    enabled = eqState.isEnabled,
+                                    onLevelChange = { newMb ->
+                                        onSetEqualizerBandLevel(band.bandIndex, newMb)
+                                    },
+                                    modifier = Modifier
+                                        .width(34.dp)
+                                        .weight(1f)
+                                        .padding(vertical = 2.dp)
+                                )
+
+                                Text(
+                                    text = band.displayFrequency,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                    }
+
+                    // 0%–200% System-Synced Volume LineSlider
+                    val isBoost = uiState.volumePercent > 100
+                    val volColor = if (isBoost) Color(0xFFFF9800) else MaterialTheme.colorScheme.primary
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(28.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = when {
+                                uiState.volumePercent == 0 -> Icons.Filled.VolumeMute
+                                uiState.volumePercent < 50 -> Icons.Filled.VolumeDown
+                                else -> Icons.Filled.VolumeUp
+                            },
+                            contentDescription = "Volume",
+                            tint = volColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        LineSlider(
+                            value = uiState.volumePercent.toFloat(),
+                            onValueChange = { onSetVolumePercent(it.roundToInt()) },
+                            valueRange = 0f..200f,
+                            activeColor = volColor,
+                            thumbColor = volColor,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("equalizer_volume_slider")
+                        )
+                        Text(
+                            text = "${uiState.volumePercent}%",
+                            style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
+                            color = volColor,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.width(44.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Vertical thin line slider for Equalizer bands.
+ */
+@Composable
+private fun VerticalEqBandLineSlider(
+    levelMb: Short,
+    minLevelMb: Short,
+    maxLevelMb: Short,
+    enabled: Boolean,
+    onLevelChange: (Short) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val primaryColor = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)
+    val range = (maxLevelMb - minLevelMb).coerceAtLeast(1)
+    val normalized = ((levelMb - minLevelMb).toFloat() / range.toFloat()).coerceIn(0f, 1f)
+
+    Box(
+        modifier = modifier
+            .pointerInput(minLevelMb, maxLevelMb, enabled) {
+                detectTapGestures { offset ->
+                    val h = size.height.toFloat().coerceAtLeast(1f)
+                    val ratio = (1f - (offset.y / h)).coerceIn(0f, 1f)
+                    val newLevel = (minLevelMb + ratio * (maxLevelMb - minLevelMb)).toInt().toShort()
+                    onLevelChange(newLevel)
+                }
+            }
+            .pointerInput(minLevelMb, maxLevelMb, enabled) {
+                detectVerticalDragGestures(
+                    onDragStart = { offset ->
+                        val h = size.height.toFloat().coerceAtLeast(1f)
+                        val ratio = (1f - (offset.y / h)).coerceIn(0f, 1f)
+                        val newLevel = (minLevelMb + ratio * (maxLevelMb - minLevelMb)).toInt().toShort()
+                        onLevelChange(newLevel)
+                    },
+                    onVerticalDrag = { change, _ ->
+                        change.consume()
+                        val h = size.height.toFloat().coerceAtLeast(1f)
+                        val ratio = (1f - (change.position.y / h)).coerceIn(0f, 1f)
+                        val newLevel = (minLevelMb + ratio * (maxLevelMb - minLevelMb)).toInt().toShort()
+                        onLevelChange(newLevel)
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val thumbRadiusPx = 5.5.dp.toPx()
+            val strokePx = 2.dp.toPx()
+            val centerX = size.width / 2f
+            val topY = thumbRadiusPx
+            val bottomY = (size.height - thumbRadiusPx).coerceAtLeast(topY)
+            val usableHeight = (bottomY - topY).coerceAtLeast(0f)
+
+            // Full vertical thin background line
+            drawLine(
+                color = trackColor,
+                start = Offset(centerX, topY),
+                end = Offset(centerX, bottomY),
+                strokeWidth = strokePx,
+                cap = StrokeCap.Round
+            )
+
+            // Center 0 dB tick mark
+            val midY = topY + usableHeight / 2f
+            drawLine(
+                color = primaryColor.copy(alpha = 0.4f),
+                start = Offset(centerX - 6.dp.toPx(), midY),
+                end = Offset(centerX + 6.dp.toPx(), midY),
+                strokeWidth = 1.2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+
+            // Active vertical thin line from bottom to thumb
+            val thumbY = bottomY - normalized * usableHeight
+            drawLine(
+                color = primaryColor,
+                start = Offset(centerX, bottomY),
+                end = Offset(centerX, thumbY),
+                strokeWidth = strokePx * 1.25f,
+                cap = StrokeCap.Round
+            )
+
+            // Thumb circle
+            drawCircle(
+                color = primaryColor,
+                radius = thumbRadiusPx,
+                center = Offset(centerX, thumbY)
+            )
+        }
+    }
+}
+
+/**
+ * Repeat Count & Pause Delay quick action pills placed directly above the bottom transport controls.
  */
 @Composable
 private fun LooperQuickActionsRow(
     loopConfig: com.example.model.LoopConfig,
-    onOpenSpeedDialog: () -> Unit,
     onOpenRepeatDialog: () -> Unit,
     onOpenDelayDialog: () -> Unit,
-    onOpenPresetsDialog: () -> Unit,
+    onSetAfterLoopAction: (AfterLoopAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        modifier = modifier.fillMaxWidth()
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        // 1. Repeat Count Pill (Icon + Value only)
+        Surface(
+            onClick = onOpenRepeatDialog,
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+            modifier = Modifier
+                .weight(1f)
+                .height(44.dp)
+                .testTag("looper_repeat_pill")
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Repeat,
+                    contentDescription = "Repeat count",
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (loopConfig.isInfinite) "∞" else "${loopConfig.repeatCount}x",
+                    style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFamily),
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // 2. Delay Interval Pill (Pause between loops button)
+        Surface(
+            onClick = onOpenDelayDialog,
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+            modifier = Modifier
+                .weight(1f)
+                .height(44.dp)
+                .testTag("looper_delay_pill")
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Timer,
+                    contentDescription = "Delay interval",
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.secondary
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (loopConfig.matchTrackDurationDelay) "Echo" else "${loopConfig.delaySeconds}s",
+                    style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFamily),
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // 3. Loop Mode Pill (Icon only, matching other buttons without text or special color; white when not active)
+        val nextMode = when (loopConfig.afterCompletionAction) {
+            AfterLoopAction.NEXT_SONG -> AfterLoopAction.REPEAT_PLAYLIST
+            AfterLoopAction.REPEAT_PLAYLIST -> AfterLoopAction.STOP
+            AfterLoopAction.STOP -> AfterLoopAction.NEXT_SONG
+        }
+        val isLoopActive = loopConfig.afterCompletionAction == AfterLoopAction.REPEAT_PLAYLIST
+        val modeIcon = if (loopConfig.afterCompletionAction == AfterLoopAction.STOP) {
+            Icons.Filled.RepeatOne
+        } else {
+            Icons.Filled.Repeat
+        }
+        val iconTint = if (isLoopActive) MaterialTheme.colorScheme.primary else Color.White
+
+        Surface(
+            onClick = { onSetAfterLoopAction(nextMode) },
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+            modifier = Modifier
+                .weight(1f)
+                .height(44.dp)
+                .testTag("folder_loop_mode_button")
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = modeIcon,
+                    contentDescription = loopConfig.afterCompletionAction.label,
+                    modifier = Modifier.size(20.dp),
+                    tint = iconTint
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Bottom-anchored timeline line slider and primary playback transport buttons.
+ */
+@Composable
+private fun BottomTransportAndTimelineSection(
+    uiState: PlayerUiState,
+    onTogglePlayPause: () -> Unit,
+    onSeekTo: (Long) -> Unit,
+    onSkipBackward: () -> Unit,
+    onSkipForward: () -> Unit,
+    onPreviousSong: () -> Unit,
+    onNextSong: () -> Unit,
+    onSetAfterLoopAction: (AfterLoopAction) -> Unit
+) {
+    val cfg = uiState.loopConfig
+    val totalDuration = uiState.trackDurationMs.coerceAtLeast(1L)
+    val currentPos = uiState.currentPositionMs.coerceIn(0L, totalDuration)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("transport_timeline_card"),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Thin Line Timeline Scrubber
+        Column(modifier = Modifier.fillMaxWidth()) {
+            LineSlider(
+                value = currentPos.toFloat(),
+                onValueChange = { onSeekTo(it.toLong()) },
+                valueRange = 0f..totalDuration.toFloat(),
+                activeColor = MaterialTheme.colorScheme.primary,
+                inactiveColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("timeline_slider")
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = formatDurationMillis(currentPos),
+                    style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.testTag("current_position_text")
+                )
+
+                Text(
+                    text = formatDurationMillis(totalDuration),
+                    style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.testTag("total_duration_text")
+                )
+            }
+        }
+
+        // Primary Transport Buttons anchored at the bottom (SpaceEvenly balances previous, play/pause, and next)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(top = 4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 1. Speed Button (Fixed equal width & height)
-            Surface(
-                onClick = onOpenSpeedDialog,
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+            IconButton(
+                onClick = onPreviousSong,
                 modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .testTag("looper_speed_pill")
+                    .size(48.dp)
+                    .testTag("previous_song_button")
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Speed,
-                        contentDescription = "Speed",
-                        modifier = Modifier.size(15.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text(
-                            text = "Speed",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "${loopConfig.playbackSpeed}x",
-                            style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                Icon(
+                    imageVector = Icons.Filled.SkipPrevious,
+                    contentDescription = "Previous song",
+                    modifier = Modifier.size(28.dp)
+                )
             }
 
-            // 2. Repeat Button (Fixed equal width & height - never changes size when repeat count changes)
-            Surface(
-                onClick = onOpenRepeatDialog,
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+            FilledIconButton(
+                onClick = onTogglePlayPause,
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
                 modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .testTag("looper_repeat_pill")
+                    .size(64.dp)
+                    .testTag("play_pause_button")
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Repeat,
-                        contentDescription = "Repeat",
-                        modifier = Modifier.size(15.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text(
-                            text = "Repeat",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = if (loopConfig.isInfinite) "∞" else "${loopConfig.repeatCount}x",
-                            style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                val isPlayingActive = uiState.phase == PlaybackPhase.PLAYING ||
+                    (uiState.phase == PlaybackPhase.WAITING_DELAY && !uiState.isDelayPaused)
+                Icon(
+                    imageVector = if (isPlayingActive) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (isPlayingActive) "Pause playback" else "Start playback",
+                    modifier = Modifier.size(34.dp)
+                )
             }
 
-            // 3. Delay Button (Fixed equal width & height)
-            Surface(
-                onClick = onOpenDelayDialog,
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)),
+            IconButton(
+                onClick = onNextSong,
                 modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .testTag("looper_delay_pill")
+                    .size(48.dp)
+                    .testTag("next_song_button")
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Timer,
-                        contentDescription = "Pause Delay",
-                        modifier = Modifier.size(15.dp),
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text(
-                            text = "Pause",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = if (loopConfig.matchTrackDurationDelay) "Echo" else "${loopConfig.delaySeconds}s",
-                            style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-
-            // 4. Presets Button (Fixed equal width & height)
-            Surface(
-                onClick = onOpenPresetsDialog,
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .testTag("looper_presets_pill")
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.LibraryMusic,
-                        contentDescription = "Presets",
-                        modifier = Modifier.size(15.dp),
-                        tint = MaterialTheme.colorScheme.tertiary
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text(
-                            text = "Presets",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "Hifz",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                Icon(
+                    imageVector = Icons.Filled.SkipNext,
+                    contentDescription = "Next song",
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
     }
 }
 
 /**
- * Clean track options row for saving song configurations and resetting loop counts.
- */
-@Composable
-private fun CleanTrackOptionsRow(
-    hasSavedConfig: Boolean,
-    onSaveConfigToSong: () -> Unit,
-    onResetLoopProgress: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        FilledTonalButton(
-            onClick = onSaveConfigToSong,
-            modifier = Modifier
-                .weight(1f)
-                .height(42.dp)
-                .testTag("save_track_config_button")
-        ) {
-            Icon(Icons.Filled.Save, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = if (hasSavedConfig) "Update Loop Config" else "Save for this Track",
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        OutlinedButton(
-            onClick = onResetLoopProgress,
-            modifier = Modifier
-                .width(104.dp)
-                .height(42.dp)
-                .testTag("reset_loop_progress_button")
-        ) {
-            Icon(Icons.Filled.Replay, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "Reset",
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-                softWrap = false
-            )
-        }
-    }
-}
-
-/**
- * Floating VLC-style volume overlay HUD.
- * ONLY displays while user is swiping on the right side of the screen!
+ * Floating volume overlay HUD (0% to 200%).
  */
 @Composable
 private fun VlcVolumeHudCard(volumePercent: Int) {
     val isBoost = volumePercent > 100
-    val vlcOrange = Color(0xFFFF9800)
+    val boostOrange = Color(0xFFFF9800)
 
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = Color(0xF0111827),
-        border = BorderStroke(1.5.dp, if (isBoost) vlcOrange else MaterialTheme.colorScheme.primary),
         shadowElevation = 14.dp,
         modifier = Modifier
-            .width(86.dp)
+            .width(82.dp)
             .testTag("vlc_volume_hud_overlay")
     ) {
         Column(
@@ -653,11 +1314,10 @@ private fun VlcVolumeHudCard(volumePercent: Int) {
                     else -> Icons.Filled.VolumeUp
                 },
                 contentDescription = "Volume",
-                tint = if (isBoost) vlcOrange else MaterialTheme.colorScheme.primary,
+                tint = if (isBoost) boostOrange else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(26.dp)
             )
 
-            // Vertical Level Gauge with 100% boundary marker
             Box(
                 modifier = Modifier
                     .width(14.dp)
@@ -672,16 +1332,7 @@ private fun VlcVolumeHudCard(volumePercent: Int) {
                         .fillMaxHeight(fillRatio)
                         .align(Alignment.BottomCenter)
                         .clip(RoundedCornerShape(7.dp))
-                        .background(if (isBoost) vlcOrange else MaterialTheme.colorScheme.primary)
-                )
-
-                // 100% boundary marker line
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .align(Alignment.Center)
-                        .background(Color.White.copy(alpha = 0.6f))
+                        .background(if (isBoost) boostOrange else MaterialTheme.colorScheme.primary)
                 )
             }
 
@@ -689,33 +1340,16 @@ private fun VlcVolumeHudCard(volumePercent: Int) {
                 text = "$volumePercent%",
                 style = MaterialTheme.typography.bodyMedium.copy(fontFamily = JetBrainsMonoFamily),
                 fontWeight = FontWeight.Bold,
-                color = if (isBoost) vlcOrange else Color.White,
+                color = if (isBoost) boostOrange else Color.White,
                 maxLines = 1,
                 softWrap = false
             )
-
-            if (isBoost) {
-                Surface(
-                    color = vlcOrange.copy(alpha = 0.25f),
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Text(
-                        text = "VLC 200%",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Black,
-                        color = vlcOrange,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
-                }
-            }
         }
     }
 }
 
 /**
- * Modal dialog for adjusting playback speed
+ * Modal dialog for adjusting playback speed using LineSlider and a 2x3 preset grid so labels never overlap
  */
 @Composable
 private fun PlaybackSpeedDialog(
@@ -724,28 +1358,43 @@ private fun PlaybackSpeedDialog(
     onDismiss: () -> Unit
 ) {
     var speed by remember { mutableStateOf(currentSpeed) }
+    val presetRows = listOf(
+        listOf(0.5f, 0.75f, 1.0f),
+        listOf(1.25f, 1.5f, 2.0f)
+    )
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.widthIn(max = 320.dp),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Filled.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Text("Playback Speed", style = MaterialTheme.typography.titleMedium)
+                Icon(
+                    imageVector = Icons.Filled.Speed,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Playback Speed",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Speed", style = MaterialTheme.typography.bodySmall)
+                    Text("Speed", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        String.format(java.util.Locale.US, "%.2fx", speed),
+                        text = String.format(Locale.US, "%.2fx", speed),
                         style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFamily),
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -753,41 +1402,51 @@ private fun PlaybackSpeedDialog(
                         softWrap = false
                     )
                 }
-                Slider(
+
+                LineSlider(
                     value = speed,
-                    onValueChange = { speed = it },
+                    onValueChange = { raw ->
+                        speed = ((raw * 20f).roundToInt() / 20f).coerceIn(0.5f, 2.0f)
+                    },
                     valueRange = 0.5f..2.0f,
-                    steps = 14,
                     modifier = Modifier.fillMaxWidth()
                 )
-                // Quick preset pills with equal fixed widths
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { s ->
-                        val isSelected = kotlin.math.abs(speed - s) < 0.05f
-                        Surface(
-                            onClick = { speed = s },
-                            shape = RoundedCornerShape(6.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                            border = BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(32.dp)
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    presetRows.forEach { rowPresets ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Text(
-                                    text = "${s}x",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
+                            rowPresets.forEach { s ->
+                                val isSelected = abs(speed - s) < 0.05f
+                                Surface(
+                                    onClick = { speed = s },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        Text(
+                                            text = "${s}x",
+                                            style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSelected) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -800,8 +1459,9 @@ private fun PlaybackSpeedDialog(
                     onSelectSpeed(speed)
                     onDismiss()
                 },
-                modifier = Modifier.height(36.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 2.dp)
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.height(40.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
             ) {
                 Text("Apply", style = MaterialTheme.typography.labelMedium)
             }
@@ -809,8 +1469,228 @@ private fun PlaybackSpeedDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                modifier = Modifier.height(36.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                modifier = Modifier.height(40.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                Text("Cancel", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    )
+}
+
+/**
+ * Modal dialog for Sleep Timer with Hours and Minutes options
+ */
+@Composable
+private fun SleepTimerDialog(
+    remainingMs: Long,
+    onSetSleepTimer: (hours: Int, minutes: Int) -> Unit,
+    onCancelSleepTimer: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val initialTotalMinutes = if (remainingMs > 0L) ((remainingMs + 59_999L) / 60_000L).toInt() else 30
+    var hours by remember { mutableStateOf((initialTotalMinutes / 60).coerceIn(0, 12)) }
+    var minutes by remember { mutableStateOf((initialTotalMinutes % 60).coerceIn(0, 59)) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Bedtime,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Sleep Timer",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (remainingMs > 0L) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Sleep Timer Active",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    text = "Stops in ${formatSleepTimerMillis(remainingMs)}",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMonoFamily),
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                            TextButton(
+                                onClick = {
+                                    onCancelSleepTimer()
+                                    onDismiss()
+                                }
+                            ) {
+                                Text("Turn Off", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Stop playback automatically after:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Quick Presets Row (Minutes & Hours)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val presets = listOf(
+                        Triple(0, 15, "15m"),
+                        Triple(0, 30, "30m"),
+                        Triple(0, 45, "45m"),
+                        Triple(1, 0, "1h"),
+                        Triple(2, 0, "2h")
+                    )
+                    presets.forEach { (h, m, label) ->
+                        val isSelected = hours == h && minutes == m
+                        Surface(
+                            onClick = {
+                                hours = h
+                                minutes = m
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(34.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                // Hours LineSlider
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Hours", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            text = "$hours hr",
+                            style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    LineSlider(
+                        value = hours.toFloat(),
+                        onValueChange = { hours = it.roundToInt().coerceIn(0, 12) },
+                        valueRange = 0f..12f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Minutes LineSlider
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Minutes", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            text = "$minutes min",
+                            style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    LineSlider(
+                        value = minutes.toFloat(),
+                        onValueChange = { minutes = it.roundToInt().coerceIn(0, 59) },
+                        valueRange = 0f..59f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Summary
+                val totalMin = hours * 60 + minutes
+                Text(
+                    text = if (totalMin > 0) {
+                        buildString {
+                            append("Timer set for ")
+                            if (hours > 0) append("$hours hr ")
+                            if (minutes > 0) append("$minutes min")
+                        }.trim()
+                    } else {
+                        "Select at least 1 minute to start timer"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (totalMin > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSetSleepTimer(hours, minutes)
+                    onDismiss()
+                },
+                enabled = (hours * 60 + minutes) > 0,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .height(40.dp)
+                    .testTag("start_sleep_timer_button"),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                Text("Start Timer", style = MaterialTheme.typography.labelMedium)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.height(40.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
             ) {
                 Text("Cancel", style = MaterialTheme.typography.labelMedium)
             }
@@ -832,18 +1712,28 @@ private fun RepeatCountDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.widthIn(max = 320.dp),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Filled.Repeat, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Text("Song Repetitions", style = MaterialTheme.typography.titleMedium)
+                Icon(
+                    imageVector = Icons.Filled.Repeat,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Song Repetitions",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     text = "Times this track should loop before stopping:",
                     style = MaterialTheme.typography.bodySmall,
@@ -851,7 +1741,7 @@ private fun RepeatCountDialog(
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf(1 to "1x", 3 to "3x", 5 to "5x", 10 to "10x", 0 to "∞").forEach { (num, label) ->
                         val isSelected = count == num
@@ -860,20 +1750,20 @@ private fun RepeatCountDialog(
                                 count = num
                                 customText = if (num > 0) num.toString() else ""
                             },
-                            shape = RoundedCornerShape(6.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                            border = BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                            },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(32.dp)
+                                .height(36.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Text(
                                     text = label,
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -892,6 +1782,7 @@ private fun RepeatCountDialog(
                     label = { Text("Custom count (0 for ∞)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -902,8 +1793,9 @@ private fun RepeatCountDialog(
                     onSetRepeatCount(count)
                     onDismiss()
                 },
-                modifier = Modifier.height(36.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 2.dp)
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.height(40.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
             ) {
                 Text("Apply", style = MaterialTheme.typography.labelMedium)
             }
@@ -911,8 +1803,8 @@ private fun RepeatCountDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                modifier = Modifier.height(36.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                modifier = Modifier.height(40.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
             ) {
                 Text("Cancel", style = MaterialTheme.typography.labelMedium)
             }
@@ -937,32 +1829,53 @@ private fun DelayIntervalDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.widthIn(max = 320.dp),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Filled.Timer, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Text("Pause Between Loops", style = MaterialTheme.typography.titleMedium)
+                Icon(
+                    imageVector = Icons.Filled.Timer,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Pause Between Loops",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Surface(
                     onClick = { isEcho = !isEcho },
                     color = if (isEcho) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Echo Mode (1x Track Length)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("Pauses for exact track duration", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                text = "Echo Mode (1x Track Length)",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Pauses for exact track duration",
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                         Switch(checked = isEcho, onCheckedChange = { isEcho = it })
                     }
@@ -971,7 +1884,7 @@ private fun DelayIntervalDialog(
                 if (!isEcho) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         listOf(0 to "0s", 2 to "2s", 3 to "3s", 5 to "5s", 10 to "10s").forEach { (sec, label) ->
                             val isSelected = seconds == sec
@@ -980,20 +1893,20 @@ private fun DelayIntervalDialog(
                                     seconds = sec
                                     customText = sec.toString()
                                 },
-                                shape = RoundedCornerShape(6.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(32.dp)
+                                    .height(36.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                     Text(
                                         text = label,
-                                        style = MaterialTheme.typography.labelSmall,
+                                        style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                         color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
@@ -1012,6 +1925,7 @@ private fun DelayIntervalDialog(
                         label = { Text("Pause duration in seconds") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1024,8 +1938,9 @@ private fun DelayIntervalDialog(
                     if (!isEcho) onSetDelaySeconds(seconds)
                     onDismiss()
                 },
-                modifier = Modifier.height(36.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 2.dp)
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.height(40.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
             ) {
                 Text("Apply", style = MaterialTheme.typography.labelMedium)
             }
@@ -1033,697 +1948,14 @@ private fun DelayIntervalDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                modifier = Modifier.height(36.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                modifier = Modifier.height(40.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
             ) {
                 Text("Cancel", style = MaterialTheme.typography.labelMedium)
             }
         }
     )
 }
-
-/**
- * Modal dialog for A-B section looping
- */
-@Composable
-private fun AbSectionDialog(
-    currentStartMs: Long,
-    currentEndMs: Long?,
-    trackDurationMs: Long,
-    currentPlaybackMs: Long,
-    onMarkStart: () -> Unit,
-    onMarkEnd: () -> Unit,
-    onClearAb: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.widthIn(max = 320.dp),
-        title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(Icons.Filled.BookmarkAdded, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Text("A–B Loop Section", style = MaterialTheme.typography.titleMedium)
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "${formatDurationMillis(currentStartMs)} → ${currentEndMs?.let { formatDurationMillis(it) } ?: "End"}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "Pos: ${formatDurationMillis(currentPlaybackMs)} / ${formatDurationMillis(trackDurationMs)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Button(
-                        onClick = onMarkStart,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(34.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text("Set [A]", style = MaterialTheme.typography.labelSmall)
-                    }
-                    Button(
-                        onClick = onMarkEnd,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(34.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text("Set [B]", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-                if (currentStartMs > 0 || currentEndMs != null) {
-                    OutlinedButton(
-                        onClick = onClearAb,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(32.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text("Clear A–B Markers", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onDismiss,
-                modifier = Modifier.height(34.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 2.dp)
-            ) {
-                Text("Done", style = MaterialTheme.typography.labelMedium)
-            }
-        }
-    )
-}
-
-/**
- * Modal dialog for choosing memorization presets
- */
-@Composable
-private fun PresetsDialog(
-    presets: List<com.example.model.LoopPreset>,
-    onSelectPreset: (com.example.model.LoopPreset) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.widthIn(max = 320.dp),
-        title = { Text("Memorization Presets", style = MaterialTheme.typography.titleMedium) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                for (preset in presets) {
-                    Surface(
-                        onClick = {
-                            onSelectPreset(preset)
-                            onDismiss()
-                        },
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(8.dp)) {
-                            Text(preset.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                            Text(preset.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.height(34.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 2.dp)
-            ) {
-                Text("Close", style = MaterialTheme.typography.labelMedium)
-            }
-        }
-    )
-}
-
-@Composable
-private fun HeroNowPlayingCard(
-    uiState: PlayerUiState,
-    onPickAudioFiles: () -> Unit,
-    onOpenLibraryTab: () -> Unit,
-    onSetShowEqualizer: (Boolean) -> Unit,
-    onSetVolumePercent: (Int) -> Unit,
-    onSetEqualizerEnabled: (Boolean) -> Unit,
-    onSetEqualizerBandLevel: (Short, Short) -> Unit,
-    onSetEqualizerPreset: (String) -> Unit,
-    onSetBassBoostStrength: (Int) -> Unit,
-    onSetVirtualizerStrength: (Int) -> Unit
-) {
-    val song = uiState.currentSong
-    val eqState = uiState.equalizerState
-    val isShowingEq = uiState.isShowingEqualizer
-
-    val isVisualizerActive = uiState.phase == PlaybackPhase.PLAYING ||
-        (uiState.phase == PlaybackPhase.WAITING_DELAY && !uiState.isDelayPaused)
-
-    val animPhase = if (isVisualizerActive) {
-        val infiniteTransition = rememberInfiniteTransition(label = "wave_anim")
-        val animated by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 6.283f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "wave_phase"
-        )
-        animated
-    } else {
-        0.8f
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { _, dragAmount ->
-                    if (dragAmount < -25f) {
-                        // Swiped LEFT: Open equalizer in the same window!
-                        onSetShowEqualizer(true)
-                    } else if (dragAmount > 25f) {
-                        // Swiped RIGHT: Return to song picture!
-                        onSetShowEqualizer(false)
-                    }
-                }
-            }
-            .testTag("hero_now_playing_card"),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 200.dp)
-        ) {
-            if (!isShowingEq) {
-                // --- VIEW 1: SONG PICTURE & HERO ACOUSTIC WAVE (Swipe left for Equalizer) ---
-                Image(
-                    painter = painterResource(id = R.drawable.img_hero_audio_wave_1794082291260),
-                    contentDescription = "Studio audio wave background",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().height(210.dp)
-                )
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(210.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color(0x880B1120),
-                                    Color(0xD90B1120),
-                                    Color(0xF50B1120)
-                                )
-                            )
-                        )
-                )
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(210.dp)
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Top Row: Mode Switcher Tab
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Window Flip Button: Tap or Swipe left to Equalizer
-                        Surface(
-                            onClick = { onSetShowEqualizer(true) },
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = RoundedCornerShape(50),
-                            modifier = Modifier.testTag("switch_to_equalizer_tab")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Equalizer,
-                                    contentDescription = "Equalizer",
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = "Swipe ◀ for Equalizer",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    // Middle: Track Title & Artist + Reactive Visualizer Bars
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { onOpenLibraryTab() }
-                        ) {
-                            Text(
-                                text = song?.title ?: "Select a Song to Begin",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = Color.White,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.testTag("now_playing_title")
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = song?.let {
-                                    listOfNotNull(it.artist.takeIf { a -> a.isNotBlank() }, it.album.takeIf { al -> al.isNotBlank() })
-                                        .joinToString(" • ")
-                                } ?: "Tap to browse songs",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color(0xFFCBD5E1),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        // Reactive Acoustic Bar Visualizer
-                        val primaryColor = MaterialTheme.colorScheme.primary
-                        val secondaryColor = MaterialTheme.colorScheme.secondary
-                        Canvas(
-                            modifier = Modifier
-                                .width(88.dp)
-                                .height(44.dp)
-                        ) {
-                            val barCount = 11
-                            val spacing = 3.dp.toPx()
-                            val barWidth = (size.width - spacing * (barCount - 1)) / barCount
-                            for (i in 0 until barCount) {
-                                val ratio = when (uiState.phase) {
-                                    PlaybackPhase.PLAYING -> {
-                                        val wave = sin(animPhase + i * 0.65f)
-                                        (0.28f + 0.72f * ((wave + 1f) / 2f))
-                                    }
-                                    PlaybackPhase.WAITING_DELAY -> {
-                                        val pulse = sin(animPhase * 0.5f + i * 0.3f)
-                                        (0.18f + 0.25f * ((pulse + 1f) / 2f))
-                                    }
-                                    else -> 0.22f
-                                }
-                                val barHeight = (size.height * ratio).coerceAtLeast(6.dp.toPx())
-                                val top = size.height - barHeight
-                                val barColor = if (uiState.phase == PlaybackPhase.WAITING_DELAY) {
-                                    secondaryColor
-                                } else {
-                                    primaryColor
-                                }
-                                drawRoundRect(
-                                    color = barColor,
-                                    topLeft = Offset(i * (barWidth + spacing), top),
-                                    size = Size(barWidth, barHeight),
-                                    cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-                                )
-                            }
-                        }
-                    }
-                }
-            } else {
-                // --- VIEW 2: 5-BAND EQUALIZER & VLC 200% BOOST (Opened by swiping left in same window!) ---
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Top Row of Equalizer Window
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            onClick = { onSetShowEqualizer(false) },
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            shape = RoundedCornerShape(50),
-                            modifier = Modifier.testTag("switch_to_artwork_tab")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.AudioFile,
-                                    contentDescription = "Artwork",
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                                Text(
-                                    text = "Swipe ▶ for Picture",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = if (eqState.isEnabled) "Equalizer ON" else "Equalizer OFF",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Switch(
-                                checked = eqState.isEnabled,
-                                onCheckedChange = onSetEqualizerEnabled,
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-                    }
-
-                    // Equalizer Presets Row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        eqState.presets.forEach { preset ->
-                            val isSel = eqState.currentPreset == preset
-                            FilterChip(
-                                selected = isSel,
-                                onClick = { onSetEqualizerPreset(preset) },
-                                label = { Text(preset, style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier.height(30.dp)
-                            )
-                        }
-                    }
-
-                    // 5 Equalizer Bands
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        eqState.bands.forEach { band ->
-                            val gainDb = band.levelMb / 100 // -15 to +15 dB
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    text = if (gainDb > 0) "+$gainDb" else "$gainDb",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (gainDb != 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-
-                                Slider(
-                                    value = band.levelMb.toFloat(),
-                                    onValueChange = { newLevel ->
-                                        onSetEqualizerBandLevel(band.bandIndex, newLevel.toInt().toShort())
-                                    },
-                                    valueRange = band.minLevelMb.toFloat()..band.maxLevelMb.toFloat(),
-                                    modifier = Modifier
-                                        .height(100.dp)
-                                        .width(52.dp)
-                                )
-
-                                Text(
-                                    text = band.displayFrequency,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-
-                    // VLC 200% Volume Boost Slider (directly inside the equalizer window)
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.VolumeUp,
-                                        contentDescription = null,
-                                        tint = if (uiState.volumePercent > 100) Color(0xFFFF9800) else MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = "200% VLC Volume Boost",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                Text(
-                                    text = if (uiState.volumePercent > 100) {
-                                        "${uiState.volumePercent}% (+${((uiState.volumePercent - 100) * 0.08).toInt()}dB Boost 🔥)"
-                                    } else {
-                                        "${uiState.volumePercent}%"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                                    color = if (uiState.volumePercent > 100) Color(0xFFFF9800) else MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Slider(
-                                value = uiState.volumePercent.toFloat(),
-                                onValueChange = { onSetVolumePercent(it.toInt()) },
-                                valueRange = 0f..200f,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = if (uiState.volumePercent > 100) Color(0xFFFF9800) else MaterialTheme.colorScheme.primary,
-                                    activeTrackColor = if (uiState.volumePercent > 100) Color(0xFFFF9800) else MaterialTheme.colorScheme.primary
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Dedicated Card for 200% VLC Audio Volume & Gain Boost
- */
-@Composable
-private fun VolumeAndBoostControlCard(
-    uiState: PlayerUiState,
-    onSetVolumePercent: (Int) -> Unit,
-    onToggleMute: () -> Unit
-) {
-    val isBoosted = uiState.volumePercent > 100
-    val boostColor = Color(0xFFFF9800) // VLC Signature Orange
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("volume_and_boost_control_card"),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isBoosted) {
-                MaterialTheme.colorScheme.surfaceVariant
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
-        ),
-        border = BorderStroke(
-            if (isBoosted) 1.5.dp else 1.dp,
-            if (isBoosted) boostColor.copy(alpha = 0.8f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Surface(
-                        color = if (isBoosted) boostColor.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = when {
-                                    uiState.isMuted || uiState.volumePercent == 0 -> Icons.Filled.VolumeOff
-                                    uiState.volumePercent <= 70 -> Icons.Filled.VolumeDown
-                                    else -> Icons.Filled.VolumeUp
-                                },
-                                contentDescription = "Volume",
-                                tint = if (isBoosted) boostColor else MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-
-                    Column {
-                        Text(
-                            text = "Volume & 200% VLC Boost",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = if (isBoosted) {
-                                "Over-amplification engine active (+8dB gain)"
-                            } else {
-                                "Standard hardware volume range (0%–100%)"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Surface(
-                    color = if (isBoosted) boostColor else MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = if (uiState.isMuted) {
-                            "MUTED"
-                        } else if (isBoosted) {
-                            "🔥 ${uiState.volumePercent}% BOOST"
-                        } else {
-                            "${uiState.volumePercent}%"
-                        },
-                        style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFamily),
-                        color = if (isBoosted) Color.Black else MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            // Slider from 0 to 200%
-            Slider(
-                value = if (uiState.isMuted) 0f else uiState.volumePercent.toFloat(),
-                onValueChange = { onSetVolumePercent(it.toInt()) },
-                valueRange = 0f..200f,
-                colors = SliderDefaults.colors(
-                    thumbColor = if (isBoosted) boostColor else MaterialTheme.colorScheme.primary,
-                    activeTrackColor = if (isBoosted) boostColor else MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("volume_boost_slider")
-            )
-
-            // Preset Pills: 50%, 100% (Standard), 150% (Boost), 200% (Max VLC Boost)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                listOf(50, 100, 150, 200).forEach { pct ->
-                    val isCurrent = uiState.volumePercent == pct && !uiState.isMuted
-                    FilledTonalButton(
-                        onClick = { onSetVolumePercent(pct) },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = if (isCurrent) {
-                                if (pct > 100) boostColor else MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            },
-                            contentColor = if (isCurrent) {
-                                if (pct > 100) Color.Black else MaterialTheme.colorScheme.onPrimary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(36.dp)
-                            .testTag("vol_preset_${pct}")
-                    ) {
-                        Text(
-                            text = if (pct == 200) "200% 🔥" else "$pct%",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-                }
-
-                FilledTonalIconButton(
-                    onClick = onToggleMute,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = if (uiState.isMuted) Icons.Filled.VolumeOff else Icons.Filled.VolumeMute,
-                        contentDescription = "Mute",
-                        tint = if (uiState.isMuted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
 
 @Composable
 private fun DelayCountdownBanner(
@@ -1737,954 +1969,89 @@ private fun DelayCountdownBanner(
     } else {
         0f
     }
-    val nextLoopNum = uiState.currentIteration + 1
-    val totalLoopsLabel = if (uiState.loopConfig.isInfinite) "∞" else uiState.loopConfig.repeatCount.toString()
 
-    Card(
+    Row(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxSize()
+            .padding(horizontal = 4.dp)
             .testTag("delay_countdown_banner"),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        ),
-        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.secondary)
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Column(
+        Icon(
+            imageVector = Icons.Filled.HourglassTop,
+            contentDescription = "Memorization delay active",
+            tint = MaterialTheme.colorScheme.secondary,
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.HourglassTop,
-                        contentDescription = "Memorization delay active",
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (uiState.isDelayPaused) {
-                                "Memorization Pause (Timer Paused)"
-                            } else {
-                                "Memorization Pause Between Loops"
-                            },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "Up Next: Repetition $nextLoopNum of $totalLoopsLabel",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                .size(14.dp)
+                .clickable { onTogglePauseDelay() }
+                .testTag("pause_delay_button")
+        )
 
-                Surface(
-                    color = MaterialTheme.colorScheme.secondary,
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text(
-                        text = formatDelayPreciseMillis(uiState.delayRemainingMs),
-                        style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMonoFamily),
-                        color = MaterialTheme.colorScheme.onSecondary,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                            .testTag("delay_remaining_text")
-                    )
-                }
-            }
+        Text(
+            text = "Pause ${formatDelayPreciseMillis(uiState.delayRemainingMs)}",
+            style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.secondary,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.testTag("delay_remaining_text")
+        )
 
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
-                color = MaterialTheme.colorScheme.secondary,
-                trackColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.2f)
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = onSkipDelayNow,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondary,
-                        contentColor = MaterialTheme.colorScheme.onSecondary
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("skip_delay_now_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayArrow,
-                        contentDescription = "Play next repetition now",
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Play Loop $nextLoopNum Now",
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = onAddExtraDelay,
-                    modifier = Modifier.testTag("add_extra_delay_button")
-                ) {
-                    Text(
-                        text = "+5s Pause",
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
-
-                FilledTonalIconButton(
-                    onClick = onTogglePauseDelay,
-                    modifier = Modifier.testTag("pause_delay_button")
-                ) {
-                    Icon(
-                        imageVector = if (uiState.isDelayPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                        contentDescription = if (uiState.isDelayPaused) "Resume delay timer" else "Hold delay timer"
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TransportAndTimelineCard(
-    uiState: PlayerUiState,
-    onTogglePlayPause: () -> Unit,
-    onSeekTo: (Long) -> Unit,
-    onSkipBackward: () -> Unit,
-    onSkipForward: () -> Unit,
-    onPreviousSong: () -> Unit,
-    onNextSong: () -> Unit,
-    onResetLoopProgress: () -> Unit,
-    onMarkSectionStart: () -> Unit,
-    onMarkSectionEnd: () -> Unit,
-    onClearAbSection: () -> Unit
-) {
-    val cfg = uiState.loopConfig
-    val totalDuration = uiState.trackDurationMs.coerceAtLeast(1L)
-    val currentPos = uiState.currentPositionMs.coerceIn(0L, totalDuration)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("transport_timeline_card"),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
-    ) {
-        Column(
+        LinearProgressIndicator(
+            progress = { progress },
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Live Loop Counter Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (cfg.isInfinite) Icons.Filled.AllInclusive else Icons.Filled.RepeatOne,
-                            contentDescription = "Current loop iteration",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        val loopStatusText = if (cfg.isInfinite) {
-                            "Repetition ${uiState.currentIteration} of ∞"
-                        } else {
-                            "Repetition ${uiState.currentIteration} of ${cfg.repeatCount}"
-                        }
-                        Text(
-                            text = loopStatusText,
-                            style = MaterialTheme.typography.labelLarge.copy(fontFamily = JetBrainsMonoFamily),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.testTag("repetition_counter_badge")
-                        )
-                    }
-                }
+                .weight(1f)
+                .height(3.dp)
+                .clip(RoundedCornerShape(1.5.dp)),
+            color = MaterialTheme.colorScheme.secondary,
+            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
+        )
 
-                Spacer(modifier = Modifier.weight(1f))
-
-                // Delay summary badge
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shape = RoundedCornerShape(50),
-                    modifier = Modifier.weight(1f, fill = false)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Timer,
-                            contentDescription = "Configured delay between loops",
-                            tint = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        val delayText = if (cfg.matchTrackDurationDelay) {
-                            "Echo Delay (${formatDurationMillis(cfg.calculateDelayMs(totalDuration))})"
-                        } else {
-                            "${cfg.delaySeconds}s Loop Delay"
-                        }
-                        Text(
-                            text = delayText,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.testTag("configured_delay_badge")
-                        )
-                    }
-                }
-            }
-
-            // Timeline Slider
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Slider(
-                    value = currentPos.toFloat(),
-                    onValueChange = { onSeekTo(it.toLong()) },
-                    valueRange = 0f..totalDuration.toFloat(),
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("timeline_slider")
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = formatDurationMillis(currentPos),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.testTag("current_position_text")
-                    )
-
-                    Text(
-                        text = "Full Song Loop",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-
-                    Text(
-                        text = formatDurationMillis(totalDuration),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.testTag("total_duration_text")
-                    )
-                }
-            }
-
-            // Primary Transport Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onPreviousSong,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("previous_song_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.SkipPrevious,
-                        contentDescription = "Previous song",
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-
-                FilledTonalIconButton(
-                    onClick = onSkipBackward,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("rewind_5s_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.FastRewind,
-                        contentDescription = "Rewind 5 seconds"
-                    )
-                }
-
-                FilledIconButton(
-                    onClick = onTogglePlayPause,
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    modifier = Modifier
-                        .size(68.dp)
-                        .testTag("play_pause_button")
-                ) {
-                    val isPlayingActive = uiState.phase == PlaybackPhase.PLAYING ||
-                        (uiState.phase == PlaybackPhase.WAITING_DELAY && !uiState.isDelayPaused)
-                    Icon(
-                        imageVector = if (isPlayingActive) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (isPlayingActive) "Pause playback" else "Start playback",
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-
-                FilledTonalIconButton(
-                    onClick = onSkipForward,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("forward_5s_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.FastForward,
-                        contentDescription = "Forward 5 seconds"
-                    )
-                }
-
-                IconButton(
-                    onClick = onNextSong,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("next_song_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.SkipNext,
-                        contentDescription = "Next song",
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun RepeatCountControlCard(
-    repeatCount: Int,
-    currentIteration: Int,
-    onSetRepeatCount: (Int) -> Unit,
-    onIncrementRepeatCount: (Int) -> Unit,
-    onOpenCustomDialog: () -> Unit
-) {
-    val isInfinite = repeatCount <= 0
-    val quickCounts = listOf(1, 2, 3, 5, 7, 10, 15, 20, 0) // 0 = Infinite
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("repeat_count_card"),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
-    ) {
-        Column(
+        Surface(
+            onClick = onAddExtraDelay,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(6.dp),
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .height(22.dp)
+                .testTag("add_extra_delay_button")
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.padding(horizontal = 6.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Filled.Repeat,
-                                contentDescription = "Song repeat count",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                    Column {
-                        Text(
-                            text = "Song Repeat Count",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "How many times a single song plays before stopping or advancing",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            // Stepper Row
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilledTonalIconButton(
-                            onClick = { onIncrementRepeatCount(-1) },
-                            enabled = !isInfinite && repeatCount > 1,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("repeat_minus_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Remove,
-                                contentDescription = "Decrease repeat count"
-                            )
-                        }
-                    }
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .clickable { onOpenCustomDialog() }
-                            .padding(horizontal = 12.dp)
-                    ) {
-                        Text(
-                            text = if (isInfinite) "∞ Infinite" else "${repeatCount}x Plays",
-                            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = JetBrainsMonoFamily),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.testTag("repeat_count_value_text")
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Edit,
-                                contentDescription = "Tap to type custom repeat count",
-                                modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "Currently on play #$currentIteration • Tap to type",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilledTonalIconButton(
-                            onClick = { onIncrementRepeatCount(1) },
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("repeat_plus_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Add,
-                                contentDescription = "Increase repeat count"
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Quick Preset Chips for Repeat Count
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                quickCounts.forEach { countOption ->
-                    val selected = repeatCount == countOption
-                    val labelText = if (countOption == 0) "∞ Loop" else "${countOption}x"
-                    FilterChip(
-                        selected = selected,
-                        onClick = { onSetRepeatCount(countOption) },
-                        label = {
-                            Text(
-                                text = labelText,
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        modifier = Modifier.testTag("repeat_chip_$countOption")
-                    )
-                }
-
-                AssistChip(
-                    onClick = onOpenCustomDialog,
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Filled.Edit,
-                            contentDescription = "Custom repeat count",
-                            modifier = Modifier.size(15.dp)
-                        )
-                    },
-                    label = { Text("Custom") },
-                    modifier = Modifier.testTag("repeat_custom_button")
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun DelayBetweenLoopsControlCard(
-    delaySeconds: Int,
-    matchTrackDurationDelay: Boolean,
-    effectiveCalculatedDelayMs: Long,
-    onSetDelaySeconds: (Int) -> Unit,
-    onIncrementDelaySeconds: (Int) -> Unit,
-    onSetMatchTrackDuration: (Boolean) -> Unit,
-    onOpenCustomDelayDialog: () -> Unit
-) {
-    val quickDelays = listOf(0, 2, 3, 5, 10, 15, 30, 60)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("delay_between_loops_card"),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Filled.Timer,
-                            contentDescription = "Delay between loops",
-                            tint = MaterialTheme.colorScheme.secondary
-                        )
-                    }
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Delay Between Loops (Pause Interval)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Wait time between each repetition so you can recite or practice",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // QuranCentral-style "Match Track Duration (Echo Mode)" Switch
-            Surface(
-                color = if (matchTrackDurationDelay) {
-                    MaterialTheme.colorScheme.secondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
-                },
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSetMatchTrackDuration(!matchTrackDurationDelay) }
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Match Track Duration (Echo Recitation Mode)",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = if (matchTrackDurationDelay) {
-                                MaterialTheme.colorScheme.onSecondaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            }
-                        )
-                        Text(
-                            text = "Automatically sets pause between loops equal to the song/segment length (${formatDurationMillis(effectiveCalculatedDelayMs)})",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (matchTrackDurationDelay) {
-                                MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f)
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Switch(
-                        checked = matchTrackDurationDelay,
-                        onCheckedChange = onSetMatchTrackDuration,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
-                            checkedTrackColor = MaterialTheme.colorScheme.secondary
-                        ),
-                        modifier = Modifier.testTag("match_duration_switch")
-                    )
-                }
-            }
-
-            // Fixed Seconds Delay Stepper
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilledTonalIconButton(
-                        onClick = { onIncrementDelaySeconds(-1) },
-                        enabled = !matchTrackDurationDelay && delaySeconds > 0,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("delay_minus_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Remove,
-                            contentDescription = "Decrease delay seconds"
-                        )
-                    }
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .clickable { onOpenCustomDelayDialog() }
-                            .padding(horizontal = 12.dp)
-                    ) {
-                        val mainLabel = if (matchTrackDurationDelay) {
-                            "1x Track (${effectiveCalculatedDelayMs / 1000}s)"
-                        } else if (delaySeconds == 0) {
-                            "0s (Immediate)"
-                        } else {
-                            "${delaySeconds}s Pause"
-                        }
-                        Text(
-                            text = mainLabel,
-                            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = JetBrainsMonoFamily),
-                            color = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.testTag("delay_seconds_value_text")
-                        )
-                        Text(
-                            text = "Tap to enter exact seconds (0s – 600s)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = { onIncrementDelaySeconds(1) },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("delay_plus_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Add,
-                            contentDescription = "Increase delay seconds"
-                        )
-                    }
-                }
-            }
-
-            // Quick Delay Chips
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                quickDelays.forEach { sec ->
-                    val selected = !matchTrackDurationDelay && delaySeconds == sec
-                    FilterChip(
-                        selected = selected,
-                        onClick = { onSetDelaySeconds(sec) },
-                        label = {
-                            Text(
-                                text = if (sec == 0) "0s (None)" else "${sec}s",
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.secondary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onSecondary
-                        ),
-                        modifier = Modifier.testTag("delay_chip_${sec}s")
-                    )
-                }
-
-                AssistChip(
-                    onClick = onOpenCustomDelayDialog,
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Filled.Edit,
-                            contentDescription = "Custom delay seconds",
-                            modifier = Modifier.size(15.dp)
-                        )
-                    },
-                    label = { Text("Custom Sec") },
-                    modifier = Modifier.testTag("delay_custom_button")
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SpeedAndCompletionCard(
-    playbackSpeed: Float,
-    afterLoopAction: AfterLoopAction,
-    hasSavedSongConfig: Boolean,
-    onSetPlaybackSpeed: (Float) -> Unit,
-    onSetAfterLoopAction: (AfterLoopAction) -> Unit,
-    onSaveConfigToSong: () -> Unit
-) {
-    val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("speed_and_completion_card"),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            // Speed Header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Speed,
-                    contentDescription = "Playback speed",
-                    tint = MaterialTheme.colorScheme.primary
-                )
                 Text(
-                    text = "Playback Speed (${playbackSpeed}x)",
-                    style = MaterialTheme.typography.titleSmall
+                    text = "+5s",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
+        }
 
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+        Surface(
+            onClick = onSkipDelayNow,
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier
+                .height(22.dp)
+                .testTag("skip_delay_now_button")
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.padding(horizontal = 8.dp)
             ) {
-                speeds.forEach { spd ->
-                    val selected = kotlin.math.abs(playbackSpeed - spd) < 0.01f
-                    FilterChip(
-                        selected = selected,
-                        onClick = { onSetPlaybackSpeed(spd) },
-                        label = { Text("${spd}x") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ),
-                        modifier = Modifier.testTag("speed_chip_$spd")
-                    )
-                }
-            }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-
-            // After All Loops Complete Action
-            Text(
-                text = "When All Repetitions Finish",
-                style = MaterialTheme.typography.titleSmall
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                AfterLoopAction.entries.forEach { action ->
-                    val selected = afterLoopAction == action
-                    FilterChip(
-                        selected = selected,
-                        onClick = { onSetAfterLoopAction(action) },
-                        label = { Text(action.label) },
-                        leadingIcon = if (selected) {
-                            {
-                                Icon(
-                                    imageVector = Icons.Filled.CheckCircle,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        } else null,
-                        modifier = Modifier.testTag("after_loop_action_${action.name}")
-                    )
-                }
-            }
-
-            // Save Loop Config to Current Song Button
-            FilledTonalButton(
-                onClick = onSaveConfigToSong,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("save_song_loop_button")
-            ) {
-                Icon(
-                    imageVector = if (hasSavedSongConfig) Icons.Filled.BookmarkAdded else Icons.Filled.Save,
-                    contentDescription = "Save loop settings to current song",
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (hasSavedSongConfig) {
-                        "Update Saved Loop Config for This Song"
-                    } else {
-                        "Save Loop & Delay Config to This Song"
-                    }
+                    text = "Skip",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
     }
-}
-
-@Composable
-private fun CustomNumberInputDialog(
-    title: String,
-    subtitle: String,
-    initialValue: String,
-    unitLabel: String,
-    onDismiss: () -> Unit,
-    onConfirm: (Int) -> Unit
-) {
-    var textValue by remember { mutableStateOf(initialValue) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title, style = MaterialTheme.typography.titleLarge) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(subtitle, style = MaterialTheme.typography.bodyMedium)
-                OutlinedTextField(
-                    value = textValue,
-                    onValueChange = { input ->
-                        textValue = input.filter { it.isDigit() }.take(4)
-                    },
-                    label = { Text("Value ($unitLabel)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("custom_number_dialog_input")
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val parsed = textValue.toIntOrNull() ?: 1
-                    onConfirm(parsed)
-                },
-                modifier = Modifier.testTag("custom_number_dialog_confirm")
-            ) {
-                Text("Apply")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
 }

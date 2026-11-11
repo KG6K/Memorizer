@@ -1,7 +1,13 @@
 package com.example.player
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.database.ContentObserver
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.PlaybackParams
 import android.media.audiofx.BassBoost
@@ -10,9 +16,13 @@ import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.SongRepository
+import kotlin.math.roundToInt
 import com.example.model.AfterLoopAction
 import com.example.model.EqualizerBand
 import com.example.model.EqualizerState
@@ -44,6 +54,7 @@ data class PlayerUiState(
     val searchQuery: String = "",
     val libraryFilter: LibraryFilter = LibraryFilter.ALL,
     val selectedTab: MainMenuTab = MainMenuTab.RECENT,
+    val customPlaybackQueue: List<LocalSong> = emptyList(),
     val currentSong: LocalSong? = null,
     val currentPlaylistName: String = "All Songs",
     val currentFolderName: String = "",
@@ -62,10 +73,12 @@ data class PlayerUiState(
     val expandedFolder: String? = null,
     val expandedPlaylistId: String? = null,
     val expandedArtist: String? = null,
-    val volumePercent: Int = 100, // 0..200 (100% = normal, >100% = VLC-style LoudnessEnhancer boost)
+    val volumePercent: Int = 100, // 0..200 (100% = normal, >100% = LoudnessEnhancer boost)
     val isMuted: Boolean = false,
     val isShowingEqualizer: Boolean = false,
-    val equalizerState: EqualizerState = EqualizerState()
+    val equalizerState: EqualizerState = EqualizerState(),
+    val sleepTimerRemainingMs: Long = 0L,
+    val sleepTimerTotalMs: Long = 0L
 ) {
     val filteredSongs: List<LocalSong>
         get() {
@@ -121,6 +134,8 @@ data class PlayerUiState(
 class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = SongRepository(application.applicationContext)
+    private val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var isUpdatingSystemVolumeInternally = false
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -128,9 +143,28 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
     private var mediaPlayer: MediaPlayer? = null
     private var positionTickerJob: Job? = null
     private var delayCountdownJob: Job? = null
+    private var sleepTimerJob: Job? = null
     private var isPlayerPrepared = false
 
+    private val systemVolumeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "android.media.VOLUME_CHANGED_ACTION") {
+                onExternalSystemVolumeChanged()
+            }
+        }
+    }
+
+    private val systemVolumeObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) {
+            super.onChange(selfChange)
+            onExternalSystemVolumeChanged()
+        }
+    }
+
     init {
+        registerSystemVolumeListeners()
+        val initialSysVol = readSystemVolumePercent()
+
         viewModelScope.launch {
             val initialConfig = withContext(Dispatchers.IO) { repository.loadActiveLoopConfig() }
             val initialPresets = withContext(Dispatchers.IO) { repository.loadPresets() }
@@ -149,7 +183,9 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
                 currentPlaylistName = "All Songs",
                 loopConfig = activeConfig,
                 trackDurationMs = firstSong?.durationMs ?: 0L,
-                presets = initialPresets
+                presets = initialPresets,
+                volumePercent = initialSysVol,
+                isMuted = initialSysVol == 0
             )
 
             if (firstSong != null) {
@@ -161,6 +197,121 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
         }
     }
 
+    private fun registerSystemVolumeListeners() {
+        val app = getApplication<Application>()
+        try {
+            val filter = IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                app.registerReceiver(systemVolumeReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                app.registerReceiver(systemVolumeReceiver, filter)
+            }
+        } catch (_: Exception) {}
+
+        try {
+            app.contentResolver.registerContentObserver(
+                Settings.System.CONTENT_URI,
+                true,
+                systemVolumeObserver
+            )
+        } catch (_: Exception) {}
+    }
+
+    private fun unregisterSystemVolumeListeners() {
+        val app = getApplication<Application>()
+        try {
+            app.unregisterReceiver(systemVolumeReceiver)
+        } catch (_: Exception) {}
+        try {
+            app.contentResolver.unregisterContentObserver(systemVolumeObserver)
+        } catch (_: Exception) {}
+    }
+
+    private fun readSystemVolumePercent(): Int {
+        return try {
+            val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+            val curVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceIn(0, maxVol)
+            ((curVol.toFloat() / maxVol.toFloat()) * 100f).roundToInt().coerceIn(0, 100)
+        } catch (_: Exception) {
+            100
+        }
+    }
+
+    private fun onExternalSystemVolumeChanged() {
+        if (isUpdatingSystemVolumeInternally) return
+        val sysPercent = readSystemVolumePercent()
+        val currentPercent = _uiState.value.volumePercent
+        // If user lowered hardware volume below 100%, or was already in 0..100% range, sync slider to hardware volume
+        if (sysPercent < 100 || currentPercent <= 100) {
+            if (currentPercent != sysPercent) {
+                _uiState.update {
+                    it.copy(
+                        volumePercent = sysPercent,
+                        isMuted = sysPercent == 0
+                    )
+                }
+                applyVolumeAndBoostInternal(syncToSystem = false)
+            }
+        }
+    }
+
+    /**
+     * Handles hardware volume Up/Down button presses so the 0%..200% slider stays in sync
+     * and smoothly steps down from 200% gain boost or adjusts hardware volume.
+     */
+    fun handleHardwareVolumeKey(isVolumeUp: Boolean): Boolean {
+        val current = _uiState.value.volumePercent
+        val maxVol = runCatching { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }.getOrDefault(15)
+        val stepPercent = (100f / maxVol.toFloat()).roundToInt().coerceAtLeast(5)
+
+        return if (isVolumeUp) {
+            if (current >= 100) {
+                val next = (current + stepPercent).coerceAtMost(200)
+                setVolumePercent(next)
+                true
+            } else {
+                try {
+                    isUpdatingSystemVolumeInternally = true
+                    audioManager.adjustStreamVolume(
+                        AudioManager.STREAM_MUSIC,
+                        AudioManager.ADJUST_RAISE,
+                        AudioManager.FLAG_SHOW_UI
+                    )
+                } catch (_: Exception) {
+                } finally {
+                    isUpdatingSystemVolumeInternally = false
+                }
+                val newSys = readSystemVolumePercent()
+                _uiState.update { it.copy(volumePercent = newSys, isMuted = newSys == 0) }
+                applyVolumeAndBoostInternal(syncToSystem = false)
+                true
+            }
+        } else {
+            // Hardware Volume Down
+            if (current > 100) {
+                val next = (current - stepPercent).coerceAtLeast(100)
+                setVolumePercent(next)
+                true
+            } else {
+                try {
+                    isUpdatingSystemVolumeInternally = true
+                    audioManager.adjustStreamVolume(
+                        AudioManager.STREAM_MUSIC,
+                        AudioManager.ADJUST_LOWER,
+                        AudioManager.FLAG_SHOW_UI
+                    )
+                } catch (_: Exception) {
+                } finally {
+                    isUpdatingSystemVolumeInternally = false
+                }
+                val newSys = readSystemVolumePercent()
+                _uiState.update { it.copy(volumePercent = newSys, isMuted = newSys == 0) }
+                applyVolumeAndBoostInternal(syncToSystem = false)
+                true
+            }
+        }
+    }
+
     /**
      * Automatically scans device storage for songs and folders on startup or when permissions are granted.
      */
@@ -169,7 +320,10 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
             val scanned = repository.scanDeviceAudioMedia()
             if (scanned.isNotEmpty()) {
                 val currentSongs = _uiState.value.songs
-                    .filterNot { it.isBuiltInSample || it.id.startsWith("builtin_sample_") }
+                    .filterNot {
+                        !com.example.BuildConfig.INCLUDE_TEST_SONGS &&
+                            (it.isBuiltInSample || it.id.startsWith("builtin_sample_"))
+                    }
                     .toMutableList()
                 val existingUris = currentSongs.map { it.uriString }.toSet()
                 val newItems = scanned.filter { it.uriString !in existingUris }
@@ -252,26 +406,65 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
     }
 
     fun playFolder(folderName: String) {
+        _uiState.update { it.copy(customPlaybackQueue = emptyList()) }
         val folderSongs = _uiState.value.songs.filter { it.folderName == folderName }
         val firstSong = folderSongs.firstOrNull() ?: return
         selectSong(firstSong, playlistName = "Folder: $folderName", folderName = folderName, autoPlay = true)
     }
 
     fun playPlaylist(playlist: Playlist) {
+        _uiState.update { it.copy(customPlaybackQueue = emptyList()) }
         val songMap = _uiState.value.songs.associateBy { it.id }
         val playlistSongs = playlist.songIds.mapNotNull { songMap[it] }
         val firstSong = playlistSongs.firstOrNull() ?: _uiState.value.songs.firstOrNull() ?: return
         selectSong(firstSong, playlistName = playlist.name, folderName = firstSong.folderName, autoPlay = true)
     }
 
-    fun createPlaylist(name: String, description: String = "") {
+    fun playSelectedSongs(songs: List<LocalSong>) {
+        if (songs.isEmpty()) return
+        val firstSong = songs.first()
+        val queueTitle = "Selection (${songs.size})"
+        val songConfig = firstSong.savedLoopConfig ?: _uiState.value.loopConfig.copy(
+            sectionStartMs = 0L,
+            sectionEndMs = null
+        )
+        val now = System.currentTimeMillis()
+        val updatedSong = firstSong.copy(lastPlayedAt = now)
+        val updatedSongs = _uiState.value.songs.map { if (it.id == firstSong.id) updatedSong else it }
+        repository.saveSongs(updatedSongs)
+        val updatedHistory = repository.recordPlayback(updatedSong, firstSong.folderName, queueTitle)
+
+        _uiState.update {
+            it.copy(
+                customPlaybackQueue = songs,
+                songs = updatedSongs,
+                history = updatedHistory,
+                currentSong = updatedSong,
+                currentPlaylistName = queueTitle,
+                currentFolderName = firstSong.folderName,
+                loopConfig = songConfig,
+                trackDurationMs = firstSong.durationMs,
+                currentIteration = 1,
+                errorMessage = null,
+                statusBannerMessage = "Playing ${songs.size} selected songs"
+            )
+        }
+        repository.saveActiveLoopConfig(songConfig)
+        prepareSongInternal(updatedSong, autoPlay = true, resetIteration = true)
+    }
+
+    fun createPlaylist(
+        name: String,
+        description: String = "",
+        initialSongIds: List<String> = emptyList()
+    ) {
         if (name.isBlank()) return
         val current = _uiState.value.playlists.toMutableList()
         val newPl = Playlist(
             id = "pl_${UUID.randomUUID()}",
             name = name.trim(),
             description = description.trim(),
-            songIds = emptyList(),
+            songIds = initialSongIds.distinct(),
             createdAt = System.currentTimeMillis(),
             lastPlayedAt = 0L
         )
@@ -280,25 +473,30 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
         _uiState.update {
             it.copy(
                 playlists = current,
-                statusBannerMessage = "Created playlist \"${newPl.name}\""
+                expandedPlaylistId = newPl.id,
+                statusBannerMessage = null
             )
         }
     }
 
     fun addSongToPlaylist(playlistId: String, songId: String) {
+        addSongsToPlaylist(playlistId, listOf(songId))
+    }
+
+    fun addSongsToPlaylist(playlistId: String, songIds: List<String>) {
+        if (songIds.isEmpty()) return
         val current = _uiState.value.playlists.toMutableList()
         val idx = current.indexOfFirst { it.id == playlistId }
         if (idx >= 0) {
             val pl = current[idx]
-            if (songId !in pl.songIds) {
-                current[idx] = pl.copy(songIds = pl.songIds + songId)
-                repository.savePlaylists(current)
-                _uiState.update {
-                    it.copy(
-                        playlists = current,
-                        statusBannerMessage = "Added track to \"${pl.name}\""
-                    )
-                }
+            val merged = (pl.songIds + songIds).distinct()
+            current[idx] = pl.copy(songIds = merged)
+            repository.savePlaylists(current)
+            _uiState.update {
+                it.copy(
+                    playlists = current,
+                    statusBannerMessage = null
+                )
             }
         }
     }
@@ -360,6 +558,7 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
             )
             player.setDataSource(context, uri)
             player.setOnPreparedListener { mp ->
+                if (mediaPlayer !== mp) return@setOnPreparedListener
                 isPlayerPrepared = true
                 val rawDuration = runCatching { mp.duration.toLong() }.getOrDefault(0L)
                 val actualDuration = rawDuration.coerceAtLeast(song.durationMs.coerceAtLeast(1000L))
@@ -393,11 +592,17 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
                 }
             }
 
-            player.setOnCompletionListener {
+            player.setOnCompletionListener { mp ->
+                if (mediaPlayer !== mp) return@setOnCompletionListener
                 onCurrentRepetitionFinished()
             }
 
-            player.setOnErrorListener { _, what, extra ->
+            player.setOnErrorListener { mp, what, extra ->
+                if (mediaPlayer !== mp) return@setOnErrorListener true
+                isPlayerPrepared = false
+                if (what == -38) {
+                    return@setOnErrorListener true
+                }
                 _uiState.update {
                     it.copy(
                         phase = PlaybackPhase.IDLE,
@@ -595,7 +800,7 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
         val mp = mediaPlayer
 
         try {
-            if (mp != null && isPlayerPrepared && mp.isPlaying) {
+            if (mp != null && isPlayerPrepared && mp.safeIsPlaying()) {
                 mp.pause()
             }
         } catch (_: Exception) {
@@ -685,11 +890,32 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
         }
     }
 
+    private fun getActiveQueue(state: PlayerUiState): List<LocalSong> {
+        if (state.customPlaybackQueue.isNotEmpty()) {
+            return state.customPlaybackQueue
+        }
+        val activeUserPlaylist = state.playlists.firstOrNull {
+            it.name.equals(state.currentPlaylistName, ignoreCase = true)
+        }
+        if (activeUserPlaylist != null) {
+            val songMap = state.songs.associateBy { it.id }
+            val playlistSongs = activeUserPlaylist.songIds.mapNotNull { songMap[it] }
+            if (playlistSongs.isNotEmpty()) return playlistSongs
+        }
+
+        if (state.currentFolderName.isNotBlank()) {
+            val folderSongs = state.songs.filter { it.folderName == state.currentFolderName }
+            if (folderSongs.isNotEmpty()) return folderSongs
+        }
+
+        return state.filteredSongs.ifEmpty { state.songs }
+    }
+
     private fun handleAllRepetitionsCompleted() {
         val state = _uiState.value
         val cfg = state.loopConfig
-        val playlist = state.filteredSongs.ifEmpty { state.songs }
-        val currentIdx = playlist.indexOfFirst { it.id == state.currentSong?.id }
+        val queue = getActiveQueue(state)
+        val currentIdx = queue.indexOfFirst { it.id == state.currentSong?.id }
 
         when (cfg.afterCompletionAction) {
             AfterLoopAction.STOP -> {
@@ -707,8 +933,14 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
                 }
             }
             AfterLoopAction.NEXT_SONG -> {
-                if (currentIdx >= 0 && currentIdx + 1 < playlist.size) {
-                    selectSong(playlist[currentIdx + 1], autoPlay = true)
+                if (currentIdx >= 0 && currentIdx + 1 < queue.size) {
+                    val nextSong = queue[currentIdx + 1]
+                    selectSong(
+                        song = nextSong,
+                        playlistName = state.currentPlaylistName,
+                        folderName = nextSong.folderName,
+                        autoPlay = true
+                    )
                 } else {
                     try {
                         mediaPlayer?.seekTo(cfg.sectionStartMs.toInt())
@@ -724,9 +956,15 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
                 }
             }
             AfterLoopAction.REPEAT_PLAYLIST -> {
-                if (playlist.isNotEmpty()) {
-                    val nextIndex = if (currentIdx >= 0) (currentIdx + 1) % playlist.size else 0
-                    selectSong(playlist[nextIndex], autoPlay = true)
+                if (queue.isNotEmpty()) {
+                    val nextIndex = if (currentIdx >= 0) (currentIdx + 1) % queue.size else 0
+                    val nextSong = queue[nextIndex]
+                    selectSong(
+                        song = nextSong,
+                        playlistName = state.currentPlaylistName,
+                        folderName = nextSong.folderName,
+                        autoPlay = true
+                    )
                 }
             }
         }
@@ -734,11 +972,17 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
 
     fun playNextSong() {
         val state = _uiState.value
-        val playlist = state.filteredSongs.ifEmpty { state.songs }
-        if (playlist.isEmpty()) return
-        val idx = playlist.indexOfFirst { it.id == state.currentSong?.id }
-        val nextIdx = if (idx >= 0) (idx + 1) % playlist.size else 0
-        selectSong(playlist[nextIdx], autoPlay = true)
+        val queue = getActiveQueue(state)
+        if (queue.isEmpty()) return
+        val idx = queue.indexOfFirst { it.id == state.currentSong?.id }
+        val nextIdx = if (idx >= 0) (idx + 1) % queue.size else 0
+        val nextSong = queue[nextIdx]
+        selectSong(
+            song = nextSong,
+            playlistName = state.currentPlaylistName,
+            folderName = nextSong.folderName,
+            autoPlay = true
+        )
     }
 
     fun playPreviousSong() {
@@ -747,11 +991,17 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
             seekTo(state.loopConfig.sectionStartMs)
             return
         }
-        val playlist = state.filteredSongs.ifEmpty { state.songs }
-        if (playlist.isEmpty()) return
-        val idx = playlist.indexOfFirst { it.id == state.currentSong?.id }
-        val prevIdx = if (idx > 0) idx - 1 else playlist.lastIndex
-        selectSong(playlist[prevIdx], autoPlay = true)
+        val queue = getActiveQueue(state)
+        if (queue.isEmpty()) return
+        val idx = queue.indexOfFirst { it.id == state.currentSong?.id }
+        val prevIdx = if (idx > 0) idx - 1 else queue.lastIndex
+        val prevSong = queue[prevIdx]
+        selectSong(
+            song = prevSong,
+            playlistName = state.currentPlaylistName,
+            folderName = prevSong.folderName,
+            autoPlay = true
+        )
     }
 
     // Loop Configuration Updates
@@ -790,7 +1040,7 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
         val clamped = speed.coerceIn(0.5f, 2.0f)
         updateLoopConfig { it.copy(playbackSpeed = clamped) }
         val mp = mediaPlayer
-        if (mp != null && isPlayerPrepared && mp.isPlaying && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (mp != null && isPlayerPrepared && mp.safeIsPlaying() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             try {
                 mp.playbackParams = PlaybackParams().setSpeed(clamped)
             } catch (_: Exception) {
@@ -1112,13 +1362,14 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
 
     fun setVolumePercent(percent: Int) {
         val clamped = percent.coerceIn(0, 200)
-        _uiState.update { it.copy(volumePercent = clamped, isMuted = false) }
-        applyVolumeAndBoostInternal()
+        _uiState.update { it.copy(volumePercent = clamped, isMuted = clamped == 0) }
+        applyVolumeAndBoostInternal(syncToSystem = true)
     }
 
     fun toggleMute() {
-        _uiState.update { it.copy(isMuted = !it.isMuted) }
-        applyVolumeAndBoostInternal()
+        val nextMuted = !_uiState.value.isMuted
+        _uiState.update { it.copy(isMuted = nextMuted) }
+        applyVolumeAndBoostInternal(syncToSystem = true)
     }
 
     fun setShowEqualizer(show: Boolean) {
@@ -1202,12 +1453,32 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
         }
     }
 
-    private fun applyVolumeAndBoostInternal() {
+    private fun applyVolumeAndBoostInternal(syncToSystem: Boolean = false) {
         val state = _uiState.value
+        val vol = if (state.isMuted) 0 else state.volumePercent
+
+        if (syncToSystem) {
+            try {
+                isUpdatingSystemVolumeInternally = true
+                val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                val targetSysVol = if (vol >= 100) {
+                    maxVol
+                } else {
+                    ((vol.toFloat() / 100f) * maxVol.toFloat()).roundToInt().coerceIn(0, maxVol)
+                }
+                if (audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) != targetSysVol) {
+                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetSysVol, 0)
+                }
+            } catch (_: Exception) {
+            } finally {
+                isUpdatingSystemVolumeInternally = false
+            }
+        }
+
         val mp = mediaPlayer ?: return
         if (!isPlayerPrepared) return
 
-        if (state.isMuted || state.volumePercent == 0) {
+        if (vol == 0) {
             try {
                 mp.setVolume(0f, 0f)
                 loudnessEnhancer?.setTargetGain(0)
@@ -1215,16 +1486,14 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
             return
         }
 
-        val vol = state.volumePercent
         if (vol <= 100) {
-            val scalar = vol / 100f
+            val scalar = (vol / 100f).coerceIn(0f, 1f)
             try {
                 mp.setVolume(scalar, scalar)
                 loudnessEnhancer?.setTargetGain(0)
             } catch (_: Exception) {}
         } else {
-            // VLC 200% volume boost:
-            // 101% to 200% maps to +100 mB to +8000 mB gain (+8dB boost)
+            // 101% to 200% maps to +8000 mB gain (200% audio gain boost)
             val boostRatio = (vol - 100) / 100f
             val targetGainMb = (boostRatio * 8000f).toInt().coerceIn(0, 8000)
             try {
@@ -1235,21 +1504,104 @@ class LoopAudioPlayerViewModel(application: Application) : AndroidViewModel(appl
     }
 
     private fun releaseMediaPlayer() {
+        val mp = mediaPlayer
+        val wasPrepared = isPlayerPrepared
+        mediaPlayer = null
         isPlayerPrepared = false
         releaseAudioEffects()
+        if (mp != null) {
+            try {
+                mp.setOnPreparedListener(null)
+                mp.setOnCompletionListener(null)
+                mp.setOnErrorListener(null)
+            } catch (_: Exception) {
+            }
+            if (wasPrepared) {
+                try {
+                    if (mp.safeIsPlaying()) {
+                        mp.pause()
+                    }
+                } catch (_: Exception) {
+                }
+            }
+            try {
+                mp.reset()
+            } catch (_: Exception) {
+            }
+            try {
+                mp.release()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun setSleepTimer(hours: Int, minutes: Int) {
+        val totalMinutes = (hours.coerceAtLeast(0) * 60L) + minutes.coerceAtLeast(0)
+        val totalMs = totalMinutes * 60_000L
+        if (totalMs <= 0L) {
+            cancelSleepTimer()
+            return
+        }
+        sleepTimerJob?.cancel()
+        _uiState.update {
+            it.copy(
+                sleepTimerRemainingMs = totalMs,
+                sleepTimerTotalMs = totalMs
+            )
+        }
+        sleepTimerJob = viewModelScope.launch {
+            val stepMs = 1000L
+            while (isActive) {
+                delay(stepMs)
+                val currentRem = _uiState.value.sleepTimerRemainingMs
+                val nextRem = (currentRem - stepMs).coerceAtLeast(0L)
+                _uiState.update { it.copy(sleepTimerRemainingMs = nextRem) }
+                if (nextRem <= 0L) {
+                    stopPlaybackForSleepTimer()
+                    break
+                }
+            }
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _uiState.update {
+            it.copy(
+                sleepTimerRemainingMs = 0L,
+                sleepTimerTotalMs = 0L
+            )
+        }
+    }
+
+    private fun stopPlaybackForSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        cancelDelayCountdown()
+        stopPositionTicker()
         try {
-            mediaPlayer?.stop()
+            if (mediaPlayer?.safeIsPlaying() == true) {
+                mediaPlayer?.pause()
+            }
         } catch (_: Exception) {
         }
-        try {
-            mediaPlayer?.release()
-        } catch (_: Exception) {
+        _uiState.update {
+            it.copy(
+                phase = PlaybackPhase.PAUSED,
+                delayRemainingMs = 0L,
+                delayTotalMs = 0L,
+                isDelayPaused = false,
+                sleepTimerRemainingMs = 0L,
+                sleepTimerTotalMs = 0L
+            )
         }
-        mediaPlayer = null
     }
 
     override fun onCleared() {
         super.onCleared()
+        unregisterSystemVolumeListeners()
+        sleepTimerJob?.cancel()
         cancelDelayCountdown()
         stopPositionTicker()
         releaseMediaPlayer()
@@ -1261,6 +1613,18 @@ fun formatDurationMillis(ms: Long): String {
     val minutes = totalSeconds / 60L
     val seconds = totalSeconds % 60L
     return "%02d:%02d".format(minutes, seconds)
+}
+
+fun formatSleepTimerMillis(ms: Long): String {
+    val totalSeconds = (ms.coerceAtLeast(0L)) / 1000L
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0L) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%02d:%02d".format(minutes, seconds)
+    }
 }
 
 fun formatDelayPreciseMillis(ms: Long): String {

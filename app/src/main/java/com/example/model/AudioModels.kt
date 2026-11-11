@@ -1,9 +1,9 @@
 package com.example.model
 
 enum class AfterLoopAction(val label: String, val subtitle: String) {
-    STOP("Stop Playback", "Pause at start after all repetitions finish"),
-    NEXT_SONG("Next Song", "Advance to next song and repeat it with same rules"),
-    REPEAT_PLAYLIST("Loop Playlist", "Cycle through all songs in library continuously")
+    REPEAT_PLAYLIST("Loop Folder / Playlist", "Play next song and loop folder or playlist continuously"),
+    NEXT_SONG("Play Folder Once", "Play next song in folder or playlist and stop at the end"),
+    STOP("Stop After Song", "Stop playback after current song repetitions finish")
 }
 
 enum class PlaybackPhase {
@@ -21,7 +21,7 @@ data class LoopConfig(
     val sectionStartMs: Long = 0L,
     val sectionEndMs: Long? = null, // null = full song duration
     val playbackSpeed: Float = 1.0f,
-    val afterCompletionAction: AfterLoopAction = AfterLoopAction.STOP
+    val afterCompletionAction: AfterLoopAction = AfterLoopAction.NEXT_SONG
 ) {
     val isInfinite: Boolean get() = repeatCount <= 0
     val hasAbSection: Boolean get() = sectionStartMs > 0L || sectionEndMs != null
@@ -64,7 +64,7 @@ data class LocalSong(
     val isBuiltInSample: Boolean = false,
     val addedAt: Long = System.currentTimeMillis(),
     val savedLoopConfig: LoopConfig? = null,
-    val folderName: String = "Built-in Studio Samples",
+    val folderName: String = "Music",
     val lastPlayedAt: Long = 0L
 )
 
@@ -102,7 +102,7 @@ data class LoopPreset(
     val delaySeconds: Int,
     val matchTrackDurationDelay: Boolean = false,
     val playbackSpeed: Float = 1.0f,
-    val afterCompletionAction: AfterLoopAction = AfterLoopAction.STOP,
+    val afterCompletionAction: AfterLoopAction = AfterLoopAction.REPEAT_PLAYLIST,
     val isBuiltIn: Boolean = false
 )
 
@@ -116,7 +116,7 @@ enum class LibraryFilter(val label: String) {
 enum class MainMenuTab(val title: String) {
     RECENT("Recent"),
     FOLDERS("Folders"),
-    ALBUMS_SINGERS("Albums / Singers"),
+    ALBUMS_SINGERS("Albums"),
     PLAYLISTS("Playlists")
 }
 

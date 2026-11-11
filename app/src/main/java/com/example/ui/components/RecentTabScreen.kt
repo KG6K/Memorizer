@@ -1,7 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,29 +20,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,17 +54,13 @@ import com.example.model.PlaybackPhase
 import com.example.model.Playlist
 import com.example.player.PlayerUiState
 import com.example.player.formatDurationMillis
-import com.example.ui.theme.JetBrainsMonoFamily
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * 1st Menu Option: Recent
  * Contains:
  * - Recent playing folders
- * - Recent songs
  * - Recent playlists
+ * - Recent songs
  */
 @Composable
 fun RecentTabScreen(
@@ -96,10 +82,9 @@ fun RecentTabScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("recent_tab_screen"),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-
         // Section 1: Recent Playing Folders
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -117,13 +102,15 @@ fun RecentTabScreen(
                     Text(
                         text = "Recent Playing Folders",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 if (recentFolders.isEmpty()) {
                     Text(
-                        text = "No recent folders found. Scan a folder or play a song to record folders.",
+                        text = "No recent folders found. Play a song to record folders.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -163,7 +150,9 @@ fun RecentTabScreen(
                     Text(
                         text = "Recent Playlists",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -192,31 +181,28 @@ fun RecentTabScreen(
             }
         }
 
-        // Section 3: Recent Songs
+        // Section 3: Recent Songs Header
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp),
+                    .padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.MusicNote,
-                        contentDescription = "Recent Songs",
-                        tint = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = "Recent Songs (${recentSongs.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Filled.MusicNote,
+                    contentDescription = "Recent Songs",
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Recent Songs (${recentSongs.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
 
@@ -237,7 +223,7 @@ fun RecentTabScreen(
         }
 
         item {
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -251,21 +237,21 @@ private fun RecentFolderCard(
     Card(
         onClick = onClick,
         modifier = Modifier
-            .width(180.dp)
+            .width(176.dp)
             .testTag("recent_folder_${folder.name}"),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isCurrent) {
                 MaterialTheme.colorScheme.secondaryContainer
             } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
             }
         )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -275,7 +261,7 @@ private fun RecentFolderCard(
             ) {
                 Surface(
                     color = MaterialTheme.colorScheme.secondary,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -308,6 +294,7 @@ private fun RecentFolderCard(
                 text = folder.name,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
+                color = if (isCurrent) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -315,7 +302,13 @@ private fun RecentFolderCard(
             Text(
                 text = "${folder.songCount} track(s)",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (isCurrent) {
+                    MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -330,21 +323,21 @@ private fun RecentPlaylistCard(
     Card(
         onClick = onClick,
         modifier = Modifier
-            .width(200.dp)
+            .width(196.dp)
             .testTag("recent_playlist_${playlist.id}"),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isCurrent) {
                 MaterialTheme.colorScheme.tertiaryContainer
             } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
             }
         )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -354,7 +347,7 @@ private fun RecentPlaylistCard(
             ) {
                 Surface(
                     color = MaterialTheme.colorScheme.tertiary,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -387,6 +380,7 @@ private fun RecentPlaylistCard(
                 text = playlist.name,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
+                color = if (isCurrent) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -394,7 +388,11 @@ private fun RecentPlaylistCard(
             Text(
                 text = if (playlist.description.isNotBlank()) playlist.description else "${playlist.songIds.size} songs in playlist",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isCurrent) {
+                    MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -418,19 +416,19 @@ private fun RecentSongItemCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("recent_song_card_${song.id}"),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isCurrent) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                MaterialTheme.colorScheme.primaryContainer
             } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
             }
         )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -440,8 +438,8 @@ private fun RecentSongItemCard(
                 } else {
                     MaterialTheme.colorScheme.surfaceVariant
                 },
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier.size(46.dp)
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.size(44.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -452,7 +450,7 @@ private fun RecentSongItemCard(
                         },
                         contentDescription = "Song status",
                         tint = if (isCurrent) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -465,6 +463,7 @@ private fun RecentSongItemCard(
                     text = song.title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
+                    color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -478,7 +477,11 @@ private fun RecentSongItemCard(
                 Text(
                     text = metaText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isCurrent) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -498,7 +501,8 @@ private fun RecentSongItemCard(
 
                 DropdownMenu(
                     expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
+                    onDismissRequest = { showMenu = false },
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     DropdownMenuItem(
                         text = { Text("Play Now") },

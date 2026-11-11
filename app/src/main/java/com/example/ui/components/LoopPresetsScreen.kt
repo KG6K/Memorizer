@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,9 +76,8 @@ fun LoopPresetsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+                )
             ) {
                 Row(
                     modifier = Modifier
@@ -213,17 +211,9 @@ private fun PresetItemCard(
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = if (isMatchingActive) {
-                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.75f)
             } else {
-                MaterialTheme.colorScheme.surface
-            }
-        ),
-        border = BorderStroke(
-            width = if (isMatchingActive) 1.5.dp else 1.dp,
-            color = if (isMatchingActive) {
-                MaterialTheme.colorScheme.secondary
-            } else {
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
             }
         )
     ) {

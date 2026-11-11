@@ -23,7 +23,7 @@ import java.util.UUID
 
 class SongRepository(private val context: Context) {
 
-    private val prefs = context.getSharedPreferences("loopwave_player_prefs", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("memorizer_prefs_v2", Context.MODE_PRIVATE)
 
     /**
      * Automatically scans device MediaStore for audio files across all supported formats
@@ -106,7 +106,13 @@ class SongRepository(private val context: Context) {
     fun loadSongs(): List<LocalSong> {
         val rawJson = prefs.getString(KEY_SONGS, null)
         if (rawJson.isNullOrBlank()) {
-            return emptyList()
+            return if (com.example.BuildConfig.INCLUDE_TEST_SONGS) {
+                val testSongs = buildBuiltInSampleSongs()
+                if (testSongs.isNotEmpty()) saveSongs(testSongs)
+                testSongs
+            } else {
+                emptyList()
+            }
         }
         return try {
             val array = JSONArray(rawJson)
@@ -115,18 +121,25 @@ class SongRepository(private val context: Context) {
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
                 val song = parseSongJson(obj)
-                if (song.isBuiltInSample || song.id.startsWith("builtin_sample_")) {
+                if (!com.example.BuildConfig.INCLUDE_TEST_SONGS &&
+                    (song.isBuiltInSample || song.id.startsWith("builtin_sample_"))
+                ) {
                     hadBuiltIn = true
                 } else {
                     result.add(song)
                 }
             }
-            if (hadBuiltIn) {
+            if (!com.example.BuildConfig.INCLUDE_TEST_SONGS && hadBuiltIn) {
                 saveSongs(result)
+            }
+            if (com.example.BuildConfig.INCLUDE_TEST_SONGS && result.isEmpty()) {
+                val testSongs = buildBuiltInSampleSongs()
+                if (testSongs.isNotEmpty()) saveSongs(testSongs)
+                return testSongs
             }
             result
         } catch (e: Exception) {
-            emptyList()
+            if (com.example.BuildConfig.INCLUDE_TEST_SONGS) buildBuiltInSampleSongs() else emptyList()
         }
     }
 
@@ -161,7 +174,7 @@ class SongRepository(private val context: Context) {
                 delaySeconds = 5,
                 matchTrackDurationDelay = false,
                 playbackSpeed = 1.0f,
-                afterCompletionAction = AfterLoopAction.STOP,
+                afterCompletionAction = AfterLoopAction.REPEAT_PLAYLIST,
                 isBuiltIn = true
             ),
             LoopPreset(
@@ -172,7 +185,7 @@ class SongRepository(private val context: Context) {
                 delaySeconds = 0,
                 matchTrackDurationDelay = true,
                 playbackSpeed = 1.0f,
-                afterCompletionAction = AfterLoopAction.STOP,
+                afterCompletionAction = AfterLoopAction.REPEAT_PLAYLIST,
                 isBuiltIn = true
             ),
             LoopPreset(
@@ -183,7 +196,7 @@ class SongRepository(private val context: Context) {
                 delaySeconds = 10,
                 matchTrackDurationDelay = false,
                 playbackSpeed = 1.0f,
-                afterCompletionAction = AfterLoopAction.NEXT_SONG,
+                afterCompletionAction = AfterLoopAction.REPEAT_PLAYLIST,
                 isBuiltIn = true
             ),
             LoopPreset(
@@ -194,7 +207,7 @@ class SongRepository(private val context: Context) {
                 delaySeconds = 3,
                 matchTrackDurationDelay = false,
                 playbackSpeed = 0.75f,
-                afterCompletionAction = AfterLoopAction.STOP,
+                afterCompletionAction = AfterLoopAction.REPEAT_PLAYLIST,
                 isBuiltIn = true
             ),
             LoopPreset(
@@ -205,7 +218,7 @@ class SongRepository(private val context: Context) {
                 delaySeconds = 2,
                 matchTrackDurationDelay = false,
                 playbackSpeed = 1.0f,
-                afterCompletionAction = AfterLoopAction.STOP,
+                afterCompletionAction = AfterLoopAction.REPEAT_PLAYLIST,
                 isBuiltIn = true
             )
         )
@@ -228,8 +241,8 @@ class SongRepository(private val context: Context) {
                         matchTrackDurationDelay = obj.optBoolean("matchTrackDurationDelay", false),
                         playbackSpeed = obj.optDouble("playbackSpeed", 1.0).toFloat(),
                         afterCompletionAction = runCatching {
-                            AfterLoopAction.valueOf(obj.optString("afterCompletionAction", AfterLoopAction.STOP.name))
-                        }.getOrDefault(AfterLoopAction.STOP),
+                            AfterLoopAction.valueOf(obj.optString("afterCompletionAction", AfterLoopAction.REPEAT_PLAYLIST.name))
+                        }.getOrDefault(AfterLoopAction.REPEAT_PLAYLIST),
                         isBuiltIn = false
                     )
                 )
@@ -441,7 +454,99 @@ class SongRepository(private val context: Context) {
         )
     }
 
-    fun buildBuiltInSampleSongs(): List<LocalSong> = emptyList()
+    fun buildBuiltInSampleSongs(): List<LocalSong> {
+        if (!com.example.BuildConfig.INCLUDE_TEST_SONGS) {
+            return emptyList()
+        }
+        val file1 = ensureSynthesizedTestWav(
+            fileName = "test_song_1.wav",
+            notesHz = doubleArrayOf(261.63, 329.63, 392.00, 523.25),
+            durationSeconds = 6
+        )
+        val file2 = ensureSynthesizedTestWav(
+            fileName = "test_song_2.wav",
+            notesHz = doubleArrayOf(293.66, 369.99, 440.00, 587.33),
+            durationSeconds = 6
+        )
+        return listOf(
+            LocalSong(
+                id = "builtin_sample_test_1",
+                title = "Test Song 1",
+                artist = "Test Audio",
+                album = "",
+                durationMs = 6000L,
+                uriString = Uri.fromFile(file1).toString(),
+                isBuiltInSample = true,
+                folderName = "Test Songs",
+                lastPlayedAt = System.currentTimeMillis() - 2000L
+            ),
+            LocalSong(
+                id = "builtin_sample_test_2",
+                title = "Test Song 2",
+                artist = "Test Audio",
+                album = "",
+                durationMs = 6000L,
+                uriString = Uri.fromFile(file2).toString(),
+                isBuiltInSample = true,
+                folderName = "Test Songs",
+                lastPlayedAt = System.currentTimeMillis() - 1000L
+            )
+        )
+    }
+
+    private fun ensureSynthesizedTestWav(
+        fileName: String,
+        notesHz: DoubleArray,
+        durationSeconds: Int
+    ): java.io.File {
+        val outFile = java.io.File(context.filesDir, fileName)
+        if (outFile.exists() && outFile.length() > 1000L) {
+            return outFile
+        }
+        val sampleRate = 22050
+        val numSamples = sampleRate * durationSeconds
+        val dataSize = numSamples * 2
+        val totalSize = 36 + dataSize
+
+        java.io.FileOutputStream(outFile).use { fos ->
+            val header = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            header.put("RIFF".toByteArray(Charsets.US_ASCII))
+            header.putInt(totalSize)
+            header.put("WAVE".toByteArray(Charsets.US_ASCII))
+            header.put("fmt ".toByteArray(Charsets.US_ASCII))
+            header.putInt(16) // PCM chunk size
+            header.putShort(1) // PCM format
+            header.putShort(1) // Mono
+            header.putInt(sampleRate)
+            header.putInt(sampleRate * 2) // Byte rate
+            header.putShort(2) // Block align
+            header.putShort(16) // Bits per sample
+            header.put("data".toByteArray(Charsets.US_ASCII))
+            header.putInt(dataSize)
+            fos.write(header.array())
+
+            val buffer = java.nio.ByteBuffer.allocate(4096).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            for (i in 0 until numSamples) {
+                val t = i.toDouble() / sampleRate
+                val noteIdx = ((t * 1.5).toInt()) % notesHz.size
+                val freq = notesHz[noteIdx]
+                val env = kotlin.math.sin(kotlin.math.PI * ((t * 1.5) % 1.0)).coerceIn(0.0, 1.0)
+                val sample = (kotlin.math.sin(2.0 * kotlin.math.PI * freq * t) * 0.45 * env * Short.MAX_VALUE)
+                    .toInt()
+                    .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                    .toShort()
+                if (buffer.remaining() < 2) {
+                    fos.write(buffer.array(), 0, buffer.position())
+                    buffer.clear()
+                }
+                buffer.putShort(sample)
+            }
+            if (buffer.position() > 0) {
+                fos.write(buffer.array(), 0, buffer.position())
+            }
+        }
+        return outFile
+    }
 
     private fun songToJson(song: LocalSong): JSONObject {
         return JSONObject().apply {
@@ -507,8 +612,8 @@ class SongRepository(private val context: Context) {
             sectionEndMs = if (hasEnd) obj.optLong("sectionEndMs") else null,
             playbackSpeed = obj.optDouble("playbackSpeed", 1.0).toFloat().coerceIn(0.5f, 2.0f),
             afterCompletionAction = runCatching {
-                AfterLoopAction.valueOf(obj.optString("afterCompletionAction", AfterLoopAction.STOP.name))
-            }.getOrDefault(AfterLoopAction.STOP)
+                AfterLoopAction.valueOf(obj.optString("afterCompletionAction", AfterLoopAction.NEXT_SONG.name))
+            }.getOrDefault(AfterLoopAction.NEXT_SONG)
         )
     }
 

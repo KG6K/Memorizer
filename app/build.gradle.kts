@@ -16,8 +16,11 @@ android {
     applicationId = "io.github.kg6k.memorizer"
     minSdk = 23
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 5
+    versionName = "1.3"
+
+    val isGitHubReleaseBuild = System.getenv("GITHUB_ACTIONS") == "true"
+    buildConfigField("boolean", "INCLUDE_TEST_SONGS", (!isGitHubReleaseBuild).toString())
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
