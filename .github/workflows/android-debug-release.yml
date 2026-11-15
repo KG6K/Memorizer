@@ -97,13 +97,13 @@ jobs:
           - **Commit SHA**: \`${GITHUB_SHA}\`
 
           ### What's New in v${VERSION_NAME}:
-          - Multi-select & range selection via long-press in Folders, Albums, and Playlists.
-          - Contextual top selection bar with real-time selection count, Select All, and instant Play.
-          - Batch queue playback: selected songs play immediately as a fresh queue.
-          - Active/inactive loop button styling: white when inactive, accent blue when active.
-          - Integrated UPI donation ID (\`ansariusman@ptyes\`) with instant UPI intent launch and copy.
-          - High-contrast music note artwork for songs without embedded thumbnails.
-          - MediaPlayer stability fixes and state management enhancements.
+          - **Android \`MediaStyle\` Media Notification**: OS Media Carousel, Quick Settings, and Lockscreen media controls (Previous, Play/Pause, Next) with clean dark styling, no fallback waveform art, no progress seekbar, and paused visibility until resumed or swiped away.
+          - **Bluetooth & Headset Media Controls**: Added \`MediaSessionCompat\` transport callbacks and automatic pause when audio output disconnects (\`ACTION_AUDIO_BECOMING_NOISY\`).
+          - **Scoped Scan Folders**: Dedicated folder picker in Settings to scan only selected folders and subfolders (reducing scan time and memory), with one-tap Rescan or reset to all device audio.
+          - **Global Search, Sort & Recent Sessions**: Top search bar, multi-criteria sorting (Name, Date Added, Duration, Song Count in Asc/Desc), and recent folder/playlist session playback tracking.
+          - **Equalizer, Volume Boost & Sleep Timer**: 5-band Equalizer with presets, Bass Boost, Virtualizer, up to 200% \`LoudnessEnhancer\` boost synced with hardware volume keys, and a Studio Sleep Timer.
+          - **Streamlined About Dialog**: Clean **Star on GitHub** and **Donate by UPI** cards with automatic clipboard copy and toast fallback, plus dynamic version display.
+          - **Runtime & Stability Fixes**: Eliminated \`MediaMetadataRetrieverJNI\` artwork errors on WAV/untagged files, upgraded paused notification actions to foreground-safe intents on Android 8–16, and guarded duration bounds.
 
           ### Artifacts & Checksums (SHA-256)
           | File | Size | SHA-256 Checksum |

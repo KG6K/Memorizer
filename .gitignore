@@ -10,7 +10,15 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
+**/build/
 /captures
 .externalNativeBuild
 .cxx
 local.properties
+.env
+.aistudio/
+.build-outputs/
+release-artifacts/
+debug.keystore
+my-upload-key.jks
+

@@ -15,8 +15,11 @@ import com.example.model.FolderInfo
 import com.example.model.LocalSong
 import com.example.model.LoopConfig
 import com.example.model.LoopPreset
-import com.example.model.PlaybackHistoryItem
 import com.example.model.Playlist
+import com.example.model.RecentCollectionSession
+import com.example.model.ScanFolderEntry
+import com.example.model.SortDirection
+import com.example.model.SortOption
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -300,62 +303,171 @@ class SongRepository(private val context: Context) {
         return imported
     }
 
-    fun importAudioFolder(treeUri: Uri): List<LocalSong> {
-        val resolver = context.contentResolver
+    fun extractFolderDisplayName(treeUri: Uri): String {
+        return try {
+            val docId = DocumentsContract.getTreeDocumentId(treeUri)
+            val tail = docId.substringAfterLast(':').substringAfterLast('/')
+            tail.ifBlank { treeUri.lastPathSegment?.substringAfterLast(':')?.substringAfterLast('/') ?: "Selected Folder" }
+        } catch (_: Exception) {
+            treeUri.lastPathSegment?.substringAfterLast(':')?.substringAfterLast('/') ?: "Selected Folder"
+        }
+    }
+
+    fun takePersistableReadPermission(treeUri: Uri) {
         try {
-            resolver.takePersistableUriPermission(
+            context.contentResolver.takePersistableUriPermission(
                 treeUri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
         } catch (_: SecurityException) {
         }
-
-        var folderName = "Scanned Folder"
-        try {
-            val docId = DocumentsContract.getTreeDocumentId(treeUri)
-            folderName = docId.substringAfterLast(':').substringAfterLast('/').ifBlank { "Scanned Folder" }
-        } catch (_: Exception) {
-        }
-
-        val discoveredUris = mutableListOf<Uri>()
-        try {
-            val docId = DocumentsContract.getTreeDocumentId(treeUri)
-            collectAudioFilesFromTree(resolver, treeUri, docId, discoveredUris, maxDepth = 3)
-        } catch (_: Exception) {
-        }
-
-        return discoveredUris.mapNotNull { extractSongFromUri(it, folderName) }
     }
+
+    fun releasePersistableReadPermission(uriString: String) {
+        try {
+            context.contentResolver.releasePersistableUriPermission(
+                Uri.parse(uriString),
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: Exception) {
+        }
+    }
+
+    fun scanSelectedFolders(
+        scanFolders: List<ScanFolderEntry>,
+        existingSongs: List<LocalSong>
+    ): Pair<List<LocalSong>, List<ScanFolderEntry>> {
+        val resolver = context.contentResolver
+        val existingByUri = existingSongs.associateBy { it.uriString }
+        val discoveredSongs = mutableListOf<LocalSong>()
+        val seenUris = mutableSetOf<String>()
+        val updatedEntries = mutableListOf<ScanFolderEntry>()
+
+        for (entry in scanFolders) {
+            val treeUri = runCatching { Uri.parse(entry.uriString) }.getOrNull()
+            if (treeUri == null) {
+                updatedEntries.add(entry.copy(trackCount = 0))
+                continue
+            }
+            val rootFolderName = entry.displayName.ifBlank { extractFolderDisplayName(treeUri) }
+            val fileCandidates = mutableListOf<DiscoveredTreeFile>()
+            try {
+                val rootDocId = DocumentsContract.getTreeDocumentId(treeUri)
+                collectAudioFilesFromTree(
+                    resolver = resolver,
+                    treeUri = treeUri,
+                    parentDocId = rootDocId,
+                    currentFolderName = rootFolderName,
+                    outFiles = fileCandidates,
+                    maxDepth = 8
+                )
+            } catch (_: Exception) {
+            }
+
+            var folderCount = 0
+            for (candidate in fileCandidates) {
+                val uriStr = candidate.uri.toString()
+                if (!seenUris.add(uriStr)) continue
+                val existing = existingByUri[uriStr]
+                val song = if (existing != null) {
+                    existing.copy(folderName = candidate.folderName.ifBlank { existing.folderName })
+                } else {
+                    extractSongFromUri(
+                        uri = candidate.uri,
+                        folderName = candidate.folderName,
+                        fallbackAddedAt = candidate.lastModifiedMs
+                    )
+                }
+                if (song != null) {
+                    discoveredSongs.add(song)
+                    folderCount++
+                }
+            }
+            updatedEntries.add(entry.copy(displayName = rootFolderName, trackCount = folderCount))
+        }
+
+        return discoveredSongs to updatedEntries
+    }
+
+    fun importAudioFolder(treeUri: Uri): List<LocalSong> {
+        takePersistableReadPermission(treeUri)
+        val folderName = extractFolderDisplayName(treeUri)
+        val candidates = mutableListOf<DiscoveredTreeFile>()
+        try {
+            val docId = DocumentsContract.getTreeDocumentId(treeUri)
+            collectAudioFilesFromTree(
+                resolver = context.contentResolver,
+                treeUri = treeUri,
+                parentDocId = docId,
+                currentFolderName = folderName,
+                outFiles = candidates,
+                maxDepth = 8
+            )
+        } catch (_: Exception) {
+        }
+
+        return candidates.mapNotNull { candidate ->
+            extractSongFromUri(
+                uri = candidate.uri,
+                folderName = candidate.folderName,
+                fallbackAddedAt = candidate.lastModifiedMs
+            )
+        }
+    }
+
+    private data class DiscoveredTreeFile(
+        val uri: Uri,
+        val folderName: String,
+        val lastModifiedMs: Long
+    )
 
     private fun collectAudioFilesFromTree(
         resolver: ContentResolver,
         treeUri: Uri,
         parentDocId: String,
-        outUris: MutableList<Uri>,
+        currentFolderName: String,
+        outFiles: MutableList<DiscoveredTreeFile>,
         maxDepth: Int
     ) {
-        if (maxDepth < 0 || outUris.size >= 150) return
+        if (maxDepth < 0) return
         val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
         val projection = arrayOf(
             DocumentsContract.Document.COLUMN_DOCUMENT_ID,
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-            DocumentsContract.Document.COLUMN_MIME_TYPE
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED
         )
         resolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
             val idIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
             val nameIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
             val mimeIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
+            val modifiedIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
 
             while (cursor.moveToNext()) {
                 val docId = if (idIdx >= 0) cursor.getString(idIdx) else continue
                 val name = if (nameIdx >= 0) cursor.getString(nameIdx) ?: "" else ""
                 val mime = if (mimeIdx >= 0) cursor.getString(mimeIdx) ?: "" else ""
+                val lastModified = if (modifiedIdx >= 0) cursor.getLong(modifiedIdx) else 0L
 
                 if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
-                    collectAudioFilesFromTree(resolver, treeUri, docId, outUris, maxDepth - 1)
+                    val subFolderName = name.ifBlank { currentFolderName }
+                    collectAudioFilesFromTree(
+                        resolver = resolver,
+                        treeUri = treeUri,
+                        parentDocId = docId,
+                        currentFolderName = subFolderName,
+                        outFiles = outFiles,
+                        maxDepth = maxDepth - 1
+                    )
                 } else if (isAudioFile(name, mime)) {
                     val fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-                    outUris.add(fileUri)
+                    outFiles.add(
+                        DiscoveredTreeFile(
+                            uri = fileUri,
+                            folderName = currentFolderName,
+                            lastModifiedMs = lastModified
+                        )
+                    )
                 }
             }
         }
@@ -399,7 +511,11 @@ class SongRepository(private val context: Context) {
             lower.endsWith(".alac")
     }
 
-    fun extractSongFromUri(uri: Uri, folderName: String = "Imported Files"): LocalSong? {
+    fun extractSongFromUri(
+        uri: Uri,
+        folderName: String = "Imported Files",
+        fallbackAddedAt: Long = 0L
+    ): LocalSong? {
         val resolver = context.contentResolver
         var displayName = ""
         try {
@@ -441,14 +557,17 @@ class SongRepository(private val context: Context) {
             }
         }
 
+        val stableId = "saf_${uri.toString().hashCode().toUInt().toString(16)}"
+        val resolvedAddedAt = if (fallbackAddedAt > 0L) fallbackAddedAt else System.currentTimeMillis()
         return LocalSong(
-            id = "song_${uri.toString().hashCode()}_${System.currentTimeMillis() % 10000}",
+            id = stableId,
             title = title,
             artist = artist,
             album = album,
             durationMs = durationMs.coerceAtLeast(1000L),
             uriString = uri.toString(),
             isBuiltInSample = false,
+            addedAt = resolvedAddedAt,
             folderName = folderName.ifBlank { "Music" },
             lastPlayedAt = 0L
         )
@@ -690,37 +809,107 @@ class SongRepository(private val context: Context) {
         }
     }
 
-    // --- Playback History Management ---
-    fun loadHistory(): List<PlaybackHistoryItem> {
-        val raw = prefs.getString(KEY_HISTORY, null)
-        if (raw.isNullOrBlank()) {
-            return emptyList()
-        }
+    // --- Sort Preferences ---
+    fun loadSortOption(): SortOption {
+        val raw = prefs.getString(KEY_SORT_OPTION, SortOption.NAME.name)
+        return runCatching { SortOption.valueOf(raw ?: SortOption.NAME.name) }
+            .getOrDefault(SortOption.NAME)
+    }
+
+    fun saveSortOption(option: SortOption) {
+        prefs.edit().putString(KEY_SORT_OPTION, option.name).apply()
+    }
+
+    fun loadSortDirection(): SortDirection {
+        val raw = prefs.getString(KEY_SORT_DIRECTION, SortDirection.ASCENDING.name)
+        return runCatching { SortDirection.valueOf(raw ?: SortDirection.ASCENDING.name) }
+            .getOrDefault(SortDirection.ASCENDING)
+    }
+
+    fun saveSortDirection(direction: SortDirection) {
+        prefs.edit().putString(KEY_SORT_DIRECTION, direction.name).apply()
+    }
+
+    // --- Recent Folder & Playlist Collection Sessions (e.g. C to F + last LoopConfig) ---
+    fun loadRecentSessions(): List<RecentCollectionSession> {
+        val raw = prefs.getString(KEY_RECENT_SESSIONS, null)
+        if (raw.isNullOrBlank()) return emptyList()
         return try {
             val arr = JSONArray(raw)
-            val list = mutableListOf<PlaybackHistoryItem>()
-            var hadBuiltIn = false
+            val list = mutableListOf<RecentCollectionSession>()
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
-                val songId = obj.optString("songId", "")
-                if (songId.startsWith("builtin_sample_")) {
-                    hadBuiltIn = true
-                    continue
+                val songIdsArr = obj.optJSONArray("songIds") ?: JSONArray()
+                val songIds = mutableListOf<String>()
+                for (j in 0 until songIdsArr.length()) {
+                    val sid = songIdsArr.optString(j, "")
+                    if (sid.isNotBlank()) songIds.add(sid)
                 }
+                val loopObj = obj.optJSONObject("loopConfig") ?: continue
                 list.add(
-                    PlaybackHistoryItem(
-                        id = obj.optString("id", UUID.randomUUID().toString()),
-                        songId = songId,
-                        songTitle = obj.optString("songTitle", ""),
-                        artist = obj.optString("artist", ""),
-                        folderName = obj.optString("folderName", "Music"),
-                        playlistName = obj.optString("playlistName", "All Songs"),
-                        playedAt = obj.optLong("playedAt", System.currentTimeMillis())
+                    RecentCollectionSession(
+                        key = obj.optString("key", ""),
+                        isPlaylist = obj.optBoolean("isPlaylist", false),
+                        name = obj.optString("name", ""),
+                        playlistId = obj.optString("playlistId", "").ifBlank { null },
+                        folderName = obj.optString("folderName", "").ifBlank { null },
+                        songIds = songIds,
+                        lastSongId = obj.optString("lastSongId", "").ifBlank { null },
+                        loopConfig = parseLoopConfigJson(loopObj),
+                        isSubSelection = obj.optBoolean("isSubSelection", false),
+                        lastPlayedAt = obj.optLong("lastPlayedAt", 0L)
                     )
                 )
             }
-            if (hadBuiltIn) {
-                saveHistory(list)
+            list.filter { it.key.isNotBlank() && it.songIds.isNotEmpty() }
+                .sortedByDescending { it.lastPlayedAt }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveRecentSessions(sessions: List<RecentCollectionSession>) {
+        val arr = JSONArray()
+        sessions.take(20).forEach { session ->
+            val obj = JSONObject().apply {
+                put("key", session.key)
+                put("isPlaylist", session.isPlaylist)
+                put("name", session.name)
+                if (session.playlistId != null) put("playlistId", session.playlistId)
+                if (session.folderName != null) put("folderName", session.folderName)
+                val idsArr = JSONArray()
+                session.songIds.forEach { idsArr.put(it) }
+                put("songIds", idsArr)
+                if (session.lastSongId != null) put("lastSongId", session.lastSongId)
+                put("loopConfig", loopConfigToJson(session.loopConfig))
+                put("isSubSelection", session.isSubSelection)
+                put("lastPlayedAt", session.lastPlayedAt)
+            }
+            arr.put(obj)
+        }
+        prefs.edit().putString(KEY_RECENT_SESSIONS, arr.toString()).apply()
+    }
+
+    // --- Scoped Scan Folders ---
+    fun loadScanFolders(): List<ScanFolderEntry> {
+        val raw = prefs.getString(KEY_SCAN_FOLDERS, null)
+        if (raw.isNullOrBlank()) return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            val list = mutableListOf<ScanFolderEntry>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val uriStr = obj.optString("uriString", "")
+                if (uriStr.isNotBlank()) {
+                    list.add(
+                        ScanFolderEntry(
+                            uriString = uriStr,
+                            displayName = obj.optString("displayName", "Selected Folder"),
+                            trackCount = obj.optInt("trackCount", 0),
+                            addedAt = obj.optLong("addedAt", System.currentTimeMillis())
+                        )
+                    )
+                }
             }
             list
         } catch (_: Exception) {
@@ -728,42 +917,18 @@ class SongRepository(private val context: Context) {
         }
     }
 
-    fun saveHistory(history: List<PlaybackHistoryItem>) {
+    fun saveScanFolders(folders: List<ScanFolderEntry>) {
         val arr = JSONArray()
-        history.take(60).forEach { item ->
+        folders.forEach { folder ->
             val obj = JSONObject().apply {
-                put("id", item.id)
-                put("songId", item.songId)
-                put("songTitle", item.songTitle)
-                put("artist", item.artist)
-                put("folderName", item.folderName)
-                put("playlistName", item.playlistName)
-                put("playedAt", item.playedAt)
+                put("uriString", folder.uriString)
+                put("displayName", folder.displayName)
+                put("trackCount", folder.trackCount)
+                put("addedAt", folder.addedAt)
             }
             arr.put(obj)
         }
-        prefs.edit().putString(KEY_HISTORY, arr.toString()).apply()
-    }
-
-    fun recordPlayback(song: LocalSong, folderName: String, playlistName: String): List<PlaybackHistoryItem> {
-        val current = loadHistory().toMutableList()
-        val newItem = PlaybackHistoryItem(
-            id = "hist_${UUID.randomUUID()}",
-            songId = song.id,
-            songTitle = song.title,
-            artist = song.artist,
-            folderName = folderName.ifBlank { song.folderName },
-            playlistName = playlistName.ifBlank { "All Songs" },
-            playedAt = System.currentTimeMillis()
-        )
-        // Put newest at index 0
-        current.add(0, newItem)
-        saveHistory(current)
-        return current
-    }
-
-    fun clearHistory() {
-        prefs.edit().remove(KEY_HISTORY).apply()
+        prefs.edit().putString(KEY_SCAN_FOLDERS, arr.toString()).apply()
     }
 
     companion object {
@@ -771,6 +936,9 @@ class SongRepository(private val context: Context) {
         private const val KEY_ACTIVE_LOOP_CONFIG = "active_loop_config_v1"
         private const val KEY_CUSTOM_PRESETS = "custom_loop_presets_v1"
         private const val KEY_PLAYLISTS = "saved_playlists_v1"
-        private const val KEY_HISTORY = "playback_history_v1"
+        private const val KEY_SORT_OPTION = "library_sort_option_v1"
+        private const val KEY_SORT_DIRECTION = "library_sort_direction_v1"
+        private const val KEY_RECENT_SESSIONS = "recent_collection_sessions_v1"
+        private const val KEY_SCAN_FOLDERS = "scoped_scan_folders_v1"
     }
 }

@@ -16,4 +16,14 @@
     <string name="btn_reset_loop_progress">Reset Loop Counter</string>
     <string name="empty_library_title">No Local Songs Match Filter</string>
     <string name="empty_library_hint">Tap Import Songs to pick MP3, WAV, M4A, or OGG files from your device storage.</string>
+    <string name="notification_channel_playback_name">Media Playback</string>
+    <string name="notification_channel_playback_desc">Shows currently playing track with Play/Pause, Previous, and Next controls.</string>
+    <string name="notification_action_previous">Previous</string>
+    <string name="notification_action_play">Play</string>
+    <string name="notification_action_pause">Pause</string>
+    <string name="notification_action_next">Next</string>
+    <string name="about_star_github">Star on GitHub</string>
+    <string name="about_donate_upi">Donate by UPI</string>
+    <string name="about_github_link_copied">GitHub link copied to clipboard</string>
+    <string name="about_upi_id_copied">UPI ID copied to clipboard</string>
 </resources>

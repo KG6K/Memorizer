@@ -14,6 +14,18 @@ enum class PlaybackPhase {
     COMPLETED_ALL_LOOPS
 }
 
+enum class SortOption(val label: String) {
+    NAME("Name"),
+    DATE_ADDED("Date Added"),
+    DURATION("Duration"),
+    SONG_COUNT("Song Count")
+}
+
+enum class SortDirection(val label: String) {
+    ASCENDING("Ascending"),
+    DESCENDING("Descending")
+}
+
 data class LoopConfig(
     val repeatCount: Int = 3, // 0 = Infinite (∞), 1..999 = exact repetition count
     val delaySeconds: Int = 3, // 0..300 seconds pause between loops
@@ -27,7 +39,8 @@ data class LoopConfig(
     val hasAbSection: Boolean get() = sectionStartMs > 0L || sectionEndMs != null
 
     fun effectiveSegmentDurationMs(trackDurationMs: Long): Long {
-        val end = (sectionEndMs ?: trackDurationMs).coerceAtMost(trackDurationMs)
+        val safeTrackDuration = trackDurationMs.coerceAtLeast(0L)
+        val end = (sectionEndMs ?: safeTrackDuration).coerceIn(0L, safeTrackDuration)
         val start = sectionStartMs.coerceIn(0L, end)
         return (end - start).coerceAtLeast(500L)
     }
@@ -77,14 +90,17 @@ data class Playlist(
     val lastPlayedAt: Long = 0L
 )
 
-data class PlaybackHistoryItem(
-    val id: String,
-    val songId: String,
-    val songTitle: String,
-    val artist: String,
-    val folderName: String,
-    val playlistName: String,
-    val playedAt: Long = System.currentTimeMillis()
+data class RecentCollectionSession(
+    val key: String, // "folder:<folderName>" or "playlist:<playlistId>"
+    val isPlaylist: Boolean,
+    val name: String,
+    val playlistId: String? = null,
+    val folderName: String? = null,
+    val songIds: List<String>,
+    val lastSongId: String? = null,
+    val loopConfig: LoopConfig,
+    val isSubSelection: Boolean,
+    val lastPlayedAt: Long = System.currentTimeMillis()
 )
 
 data class FolderInfo(
@@ -92,6 +108,13 @@ data class FolderInfo(
     val songCount: Int,
     val totalDurationMs: Long = 0L,
     val lastPlayedAt: Long = 0L
+)
+
+data class ScanFolderEntry(
+    val uriString: String,
+    val displayName: String,
+    val trackCount: Int = 0,
+    val addedAt: Long = System.currentTimeMillis()
 )
 
 data class LoopPreset(

@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -31,12 +30,12 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -58,12 +57,16 @@ import androidx.compose.ui.unit.dp
 import com.example.model.FolderInfo
 import com.example.model.LocalSong
 import com.example.model.PlaybackPhase
+import com.example.model.songMatchesQuery
+import com.example.model.sortFolderGroups
+import com.example.model.sortSongs
 import com.example.player.PlayerUiState
 import com.example.player.formatDurationMillis
 
 /**
  * 2nd Menu Option: Folders
- * Displays folders which contain songs, with folder-level playback and browsing.
+ * Displays folders which contain songs, with lazy-loaded expandable track lists
+ * so even folders with 400+ or thousands of songs open smoothly without freezes or crashes.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -75,15 +78,49 @@ fun FoldersTabScreen(
     onAddToPlaylistClick: (LocalSong) -> Unit,
     onOpenStudioPlayer: () -> Unit,
     modifier: Modifier = Modifier,
-    onPlaySelectedSongs: (List<LocalSong>) -> Unit = {},
+    onPlaySelectedSongs: (List<LocalSong>, sourceFolderName: String?) -> Unit = { _, _ -> },
     onPickAudioFolder: () -> Unit = {},
     onPickAudioFiles: () -> Unit = {}
 ) {
-    val folderGroups = uiState.folderGroups
-    val songsByFolder = remember(uiState.songs) {
+    val normalizedQuery = uiState.searchQuery.trim().lowercase()
+    val allSongsByFolder = remember(uiState.songs) {
         uiState.songs.groupBy { it.folderName }
     }
+    val songsByFolder = remember(
+        allSongsByFolder,
+        normalizedQuery,
+        uiState.sortOption,
+        uiState.sortDirection
+    ) {
+        allSongsByFolder.mapValues { (folderName, songs) ->
+            val matching = if (normalizedQuery.isBlank()) {
+                songs
+            } else {
+                val filtered = songs.filter { songMatchesQuery(it, normalizedQuery) }
+                if (filtered.isEmpty() && folderName.lowercase().contains(normalizedQuery)) {
+                    songs
+                } else {
+                    filtered
+                }
+            }
+            sortSongs(matching, uiState.sortOption, uiState.sortDirection)
+        }.filterValues { it.isNotEmpty() }
+    }
+    val folderGroups = remember(songsByFolder, uiState.sortOption, uiState.sortDirection) {
+        val raw = songsByFolder.map { (name, list) ->
+            FolderInfo(
+                name = name,
+                songCount = list.size,
+                totalDurationMs = list.sumOf { it.durationMs },
+                lastPlayedAt = list.maxOfOrNull { it.lastPlayedAt } ?: 0L
+            )
+        }
+        sortFolderGroups(raw, songsByFolder, uiState.sortOption, uiState.sortDirection)
+    }
     val selectionState = rememberSongSelection()
+    val currentSongId = uiState.currentSong?.id
+    val isPlaybackActive = uiState.phase == PlaybackPhase.PLAYING ||
+        uiState.phase == PlaybackPhase.WAITING_DELAY
 
     Column(
         modifier = modifier
@@ -101,7 +138,10 @@ fun FoldersTabScreen(
                 val allSongs = folderGroups.flatMap { fg -> songsByFolder[fg.name] ?: emptyList() }
                 val selected = allSongs.filter { it.id in selectionState.selectedIds }
                 if (selected.isNotEmpty()) {
-                    onPlaySelectedSongs(selected)
+                    val targetFolder = uiState.expandedFolder
+                        ?.takeIf { exp -> selected.all { it.folderName == exp } }
+                        ?: selected.map { it.folderName }.distinct().singleOrNull()
+                    onPlaySelectedSongs(selected, targetFolder)
                     selectionState.onClear()
                 }
             }
@@ -110,90 +150,108 @@ fun FoldersTabScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-        if (folderGroups.isEmpty()) {
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(
+            if (folderGroups.isEmpty()) {
+                item(key = "empty_folders_card") {
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                            .padding(top = 16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.FolderOpen,
-                            contentDescription = "No folders",
-                            modifier = Modifier.size(44.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (normalizedQuery.isNotBlank()) Icons.Filled.SearchOff else Icons.Filled.FolderOpen,
+                                contentDescription = if (normalizedQuery.isNotBlank()) "No search results" else "No folders",
+                                modifier = Modifier.size(44.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = if (normalizedQuery.isNotBlank()) "No Matching Folders or Songs" else "No Audio Folders Found",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (normalizedQuery.isNotBlank()) {
+                                    "Try another keyword or clear your search query."
+                                } else {
+                                    "Grant audio permission to automatically scan music folders from your device storage."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            } else {
+                folderGroups.forEach { folder ->
+                    val songsInFolder = songsByFolder[folder.name] ?: emptyList()
+                    val isExpanded = if (normalizedQuery.isNotBlank()) {
+                        true
+                    } else {
+                        uiState.expandedFolder == folder.name
+                    }
+                    val isCurrentFolder = uiState.currentFolderName == folder.name
+
+                    item(key = "folder_header_${folder.name}", contentType = "folder_header") {
+                        FolderGroupHeaderCard(
+                            folder = folder,
+                            isExpanded = isExpanded,
+                            isCurrentFolder = isCurrentFolder,
+                            onToggleExpand = { onToggleExpandFolder(folder.name) },
+                            onPlayFolder = { onPlayFolder(folder.name) }
                         )
-                        Text(
-                            text = "No Audio Folders Found",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Grant audio permission to automatically scan music folders from your device storage.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    }
+
+                    if (isExpanded) {
+                        items(
+                            items = songsInFolder,
+                            key = { song -> "folder_${folder.name}_song_${song.id}" },
+                            contentType = { "folder_song_row" }
+                        ) { song ->
+                            FolderSongRowItem(
+                                song = song,
+                                songsInFolder = songsInFolder,
+                                isCurrent = song.id == currentSongId,
+                                isPlaying = song.id == currentSongId && isPlaybackActive,
+                                isSelected = song.id in selectionState.selectedIds,
+                                isSelectionMode = selectionState.isSelectionMode,
+                                selectionState = selectionState,
+                                onSelectSong = {
+                                    onSelectSong(song, "Folder: ${folder.name}", folder.name)
+                                },
+                                onAddToPlaylistClick = { onAddToPlaylistClick(song) },
+                                onOpenStudioPlayer = onOpenStudioPlayer
+                            )
+                        }
                     }
                 }
             }
-        } else {
-            items(folderGroups, key = { it.name }) { folder ->
-                val songsInFolder = songsByFolder[folder.name] ?: emptyList()
-                val isExpanded = uiState.expandedFolder == folder.name
-                val isCurrentFolder = uiState.currentFolderName == folder.name
 
-                FolderGroupCard(
-                    folder = folder,
-                    songs = songsInFolder,
-                    isExpanded = isExpanded,
-                    isCurrentFolder = isCurrentFolder,
-                    uiState = uiState,
-                    onToggleExpand = { onToggleExpandFolder(folder.name) },
-                    onPlayFolder = { onPlayFolder(folder.name) },
-                    onSelectSong = { song: LocalSong ->
-                        onSelectSong(song, "Folder: ${folder.name}", folder.name)
-                    },
-                    selectionState = selectionState,
-                    onAddToPlaylistClick = onAddToPlaylistClick,
-                    onOpenStudioPlayer = onOpenStudioPlayer
-                )
+            item(key = "folders_bottom_spacer") {
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
-
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FolderGroupCard(
+private fun FolderGroupHeaderCard(
     folder: FolderInfo,
-    songs: List<LocalSong>,
     isExpanded: Boolean,
     isCurrentFolder: Boolean,
-    uiState: PlayerUiState,
-    selectionState: SongSelectionState,
     onToggleExpand: () -> Unit,
-    onPlayFolder: () -> Unit,
-    onSelectSong: (LocalSong) -> Unit,
-    onAddToPlaylistClick: (LocalSong) -> Unit,
-    onOpenStudioPlayer: () -> Unit
+    onPlayFolder: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -208,249 +266,241 @@ private fun FolderGroupCard(
             }
         )
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onToggleExpand() }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggleExpand() }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                color = if (isCurrentFolder) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.secondaryContainer
+                },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.size(44.dp)
             ) {
-                Surface(
-                    color = if (isCurrentFolder) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Filled.Folder,
-                            contentDescription = "Folder",
-                            tint = if (isCurrentFolder) {
-                                MaterialTheme.colorScheme.onPrimary
-                            } else {
-                                MaterialTheme.colorScheme.onSecondaryContainer
-                            },
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Text(
-                        text = folder.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isCurrentFolder) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${folder.songCount} song(s) • ${formatDurationMillis(folder.totalDurationMs)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isCurrentFolder) {
-                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Filled.Folder,
+                        contentDescription = "Folder",
+                        tint = if (isCurrentFolder) {
+                            MaterialTheme.colorScheme.onPrimary
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            MaterialTheme.colorScheme.onSecondaryContainer
                         },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        modifier = Modifier.size(22.dp)
                     )
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    FilledIconButton(
-                        onClick = onPlayFolder,
-                        shape = CircleShape,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .testTag("play_folder_${folder.name}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.PlayArrow,
-                            contentDescription = "Play entire folder",
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = onToggleExpand,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                            contentDescription = if (isExpanded) "Collapse folder songs" else "Expand folder songs"
-                        )
-                    }
                 }
             }
 
-            AnimatedVisibility(visible = isExpanded) {
-                Column(
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = folder.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isCurrentFolder) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${folder.songCount} song(s) • ${formatDurationMillis(folder.totalDurationMs)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isCurrentFolder) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                FilledIconButton(
+                    onClick = onPlayFolder,
+                    shape = CircleShape,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .size(38.dp)
+                        .testTag("play_folder_${folder.name}")
                 ) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = "Play entire folder",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
 
-                    val haptic = LocalHapticFeedback.current
+                IconButton(
+                    onClick = onToggleExpand,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = if (isExpanded) "Collapse folder songs" else "Expand folder songs"
+                    )
+                }
+            }
+        }
+    }
+}
 
-                    songs.forEach { song ->
-                        val isCurrent = song.id == uiState.currentSong?.id
-                        val isSelected = selectionState.selectedIds.contains(song.id)
-                        val isPlaying = isCurrent && (
-                            uiState.phase == PlaybackPhase.PLAYING ||
-                                uiState.phase == PlaybackPhase.WAITING_DELAY
-                            )
-                        var showSongMenu by remember { mutableStateOf(false) }
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FolderSongRowItem(
+    song: LocalSong,
+    songsInFolder: List<LocalSong>,
+    isCurrent: Boolean,
+    isPlaying: Boolean,
+    isSelected: Boolean,
+    isSelectionMode: Boolean,
+    selectionState: SongSelectionState,
+    onSelectSong: () -> Unit,
+    onAddToPlaylistClick: () -> Unit,
+    onOpenStudioPlayer: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    var showSongMenu by remember { mutableStateOf(false) }
 
-                        Surface(
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                            } else if (isCurrent) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                            },
-                            border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .testTag("folder_song_${song.id}")
-                                .combinedClickable(
-                                    onClick = {
-                                        if (selectionState.isSelectionMode) {
-                                            selectionState.onToggle(song)
-                                        } else {
-                                            onSelectSong(song)
-                                        }
-                                    },
-                                    onLongClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        if (selectionState.isSelectionMode) {
-                                            selectionState.onRangeSelect(song, songs)
-                                        } else {
-                                            selectionState.onToggle(song)
-                                        }
-                                    }
-                                )
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                if (selectionState.isSelectionMode) {
-                                    SelectionCheckBadge(isSelected = isSelected)
-                                } else {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Filled.GraphicEq else Icons.Filled.AudioFile,
-                                        contentDescription = "Audio track",
-                                        tint = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                                ) {
-                                    Text(
-                                        text = song.title,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = "${song.artist} • ${formatDurationMillis(song.durationMs)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                if (song.savedLoopConfig != null) {
-                                    val loopCfg = song.savedLoopConfig
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.secondaryContainer,
-                                        shape = RoundedCornerShape(6.dp)
-                                    ) {
-                                        Text(
-                                            text = if (loopCfg.isInfinite) "∞" else "${loopCfg.repeatCount}x",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            softWrap = false,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-
-                                Box {
-                                    IconButton(
-                                        onClick = { showSongMenu = true },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.MoreVert,
-                                            contentDescription = "Options",
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-
-                                    DropdownMenu(
-                                        expanded = showSongMenu,
-                                        onDismissRequest = { showSongMenu = false },
-                                        shape = RoundedCornerShape(16.dp)
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Play Now") },
-                                            leadingIcon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
-                                            onClick = {
-                                                showSongMenu = false
-                                                onSelectSong(song)
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Add to Playlist") },
-                                            leadingIcon = { Icon(Icons.Filled.PlaylistAdd, contentDescription = null) },
-                                            onClick = {
-                                                showSongMenu = false
-                                                onAddToPlaylistClick(song)
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Studio Looper") },
-                                            leadingIcon = { Icon(Icons.Filled.Repeat, contentDescription = null) },
-                                            onClick = {
-                                                showSongMenu = false
-                                                onSelectSong(song)
-                                                onOpenStudioPlayer()
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
+    Surface(
+        color = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+        } else if (isCurrent) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        },
+        border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 10.dp)
+            .testTag("folder_song_${song.id}")
+            .combinedClickable(
+                onClick = {
+                    if (isSelectionMode) {
+                        selectionState.onToggle(song)
+                    } else {
+                        onSelectSong()
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
+                },
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    if (isSelectionMode) {
+                        selectionState.onRangeSelect(song, songsInFolder)
+                    } else {
+                        selectionState.onToggle(song)
+                    }
+                }
+            )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (isSelectionMode) {
+                SelectionCheckBadge(isSelected = isSelected)
+            } else {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Filled.GraphicEq else Icons.Filled.AudioFile,
+                    contentDescription = "Audio track",
+                    tint = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${song.artist} • ${formatDurationMillis(song.durationMs)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            if (song.savedLoopConfig != null) {
+                val loopCfg = song.savedLoopConfig
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = if (loopCfg.isInfinite) "∞" else "${loopCfg.repeatCount}x",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Box {
+                IconButton(
+                    onClick = { showSongMenu = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = "Options",
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showSongMenu,
+                    onDismissRequest = { showSongMenu = false },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Play Now") },
+                        leadingIcon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
+                        onClick = {
+                            showSongMenu = false
+                            onSelectSong()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Add to Playlist") },
+                        leadingIcon = { Icon(Icons.Filled.PlaylistAdd, contentDescription = null) },
+                        onClick = {
+                            showSongMenu = false
+                            onAddToPlaylistClick()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Studio Looper") },
+                        leadingIcon = { Icon(Icons.Filled.Repeat, contentDescription = null) },
+                        onClick = {
+                            showSongMenu = false
+                            onSelectSong()
+                            onOpenStudioPlayer()
+                        }
+                    )
                 }
             }
         }

@@ -1,6 +1,7 @@
 package com.example
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -13,7 +14,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,11 +38,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,10 +67,9 @@ import com.example.ui.components.FoldersTabScreen
 import com.example.ui.components.LastPlayingBottomBar
 import com.example.ui.components.MainMenuTabsRow
 import com.example.ui.components.MainTopHeaderBar
-import com.example.ui.components.PlaybackHistoryBottomSheet
 import com.example.ui.components.PlaylistsTabScreen
 import com.example.ui.components.RecentTabScreen
-import com.example.ui.components.SettingsBottomSheet
+import com.example.ui.components.SettingsScreen
 import com.example.ui.components.StudioPlayerScreen
 import com.example.ui.theme.AppThemeSetting
 import com.example.ui.theme.MyApplicationTheme
@@ -79,31 +79,66 @@ import android.view.KeyEvent
 import androidx.activity.viewModels
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_OPEN_STUDIO_PLAYER = "com.example.EXTRA_OPEN_STUDIO_PLAYER"
+    }
+
     private val playerViewModel: LoopAudioPlayerViewModel by viewModels()
+    private var openStudioPlayerTrigger by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         volumeControlStream = AudioManager.STREAM_MUSIC
         enableEdgeToEdge()
+        handleNotificationIntent(intent)
         setContent {
             var themeSetting by rememberSaveable { mutableStateOf(AppThemeSetting.SYSTEM) }
             MyApplicationTheme(themeSetting = themeSetting) {
                 LoopWavePlayerApp(
                     themeSetting = themeSetting,
                     onSelectThemeSetting = { themeSetting = it },
-                    viewModel = playerViewModel
+                    viewModel = playerViewModel,
+                    openStudioPlayerTrigger = openStudioPlayerTrigger,
+                    onConsumeOpenStudioPlayer = { openStudioPlayerTrigger = false }
                 )
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_STUDIO_PLAYER, false) == true) {
+            openStudioPlayerTrigger = true
+            intent.removeExtra(EXTRA_OPEN_STUDIO_PLAYER)
         }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
             KeyEvent.KEYCODE_VOLUME_UP -> {
-                playerViewModel.handleHardwareVolumeKey(isVolumeUp = true)
+                if (playerViewModel.shouldInterceptVolumeKeyForBoost(isVolumeUp = true)) {
+                    playerViewModel.handleHardwareVolumeKey(isVolumeUp = true)
+                    true
+                } else {
+                    val handled = super.onKeyDown(keyCode, event)
+                    playerViewModel.syncFromSystemVolumeAfterHardwareKey()
+                    handled
+                }
             }
             KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                playerViewModel.handleHardwareVolumeKey(isVolumeUp = false)
+                if (playerViewModel.shouldInterceptVolumeKeyForBoost(isVolumeUp = false)) {
+                    playerViewModel.handleHardwareVolumeKey(isVolumeUp = false)
+                    true
+                } else {
+                    val handled = super.onKeyDown(keyCode, event)
+                    playerViewModel.syncFromSystemVolumeAfterHardwareKey()
+                    handled
+                }
             }
             else -> super.onKeyDown(keyCode, event)
         }
@@ -115,17 +150,26 @@ class MainActivity : ComponentActivity() {
 fun LoopWavePlayerApp(
     themeSetting: AppThemeSetting = AppThemeSetting.SYSTEM,
     onSelectThemeSetting: (AppThemeSetting) -> Unit = {},
-    viewModel: LoopAudioPlayerViewModel = viewModel()
+    viewModel: LoopAudioPlayerViewModel = viewModel(),
+    openStudioPlayerTrigger: Boolean = false,
+    onConsumeOpenStudioPlayer: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    var showHistorySheet by rememberSaveable { mutableStateOf(false) }
-    var showSettingsSheet by rememberSaveable { mutableStateOf(false) }
+    var isSettingsOpen by rememberSaveable { mutableStateOf(false) }
     var showAboutDialog by rememberSaveable { mutableStateOf(false) }
     var showCreatePlaylistDialog by rememberSaveable { mutableStateOf(false) }
     var songToAddToPlaylist by remember { mutableStateOf<LocalSong?>(null) }
     var isStudioPlayerOpen by rememberSaveable { mutableStateOf(false) }
+    var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(openStudioPlayerTrigger) {
+        if (openStudioPlayerTrigger) {
+            isStudioPlayerOpen = true
+            onConsumeOpenStudioPlayer()
+        }
+    }
 
     // Automatic folder & storage audio scan on startup with graceful permission check
     val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -134,26 +178,54 @@ fun LoopWavePlayerApp(
         Manifest.permission.READ_EXTERNAL_STORAGE
     }
 
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+
+    val requestNotificationPermissionIfNeeded = remember(context) {
+        {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                !hasRequestedNotificationPermission &&
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                hasRequestedNotificationPermission = true
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
             viewModel.scanDeviceAudio()
         }
+        requestNotificationPermissionIfNeeded()
     }
 
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED) {
             viewModel.scanDeviceAudio()
+            requestNotificationPermissionIfNeeded()
         } else {
             permissionLauncher.launch(audioPermission)
         }
     }
 
-    // BackHandler: If Studio Player or subview is open, close it first
-    BackHandler(enabled = isStudioPlayerOpen || uiState.expandedFolder != null || uiState.expandedPlaylistId != null) {
+    // BackHandler: If Studio Player, Settings, or subview is open, close it first
+    BackHandler(
+        enabled = isStudioPlayerOpen ||
+            isSettingsOpen ||
+            uiState.expandedFolder != null ||
+            uiState.expandedPlaylistId != null
+    ) {
         if (isStudioPlayerOpen) {
             isStudioPlayerOpen = false
+        } else if (isSettingsOpen) {
+            isSettingsOpen = false
         } else if (uiState.expandedFolder != null) {
             viewModel.setExpandedFolder(null)
         } else if (uiState.expandedPlaylistId != null) {
@@ -161,7 +233,7 @@ fun LoopWavePlayerApp(
         }
     }
 
-    // Secondary SAF Launchers if user ever picks custom audio from system picker
+    // SAF Launchers for custom audio files and Scoped Scan Folders
     val audioFilesPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
@@ -170,17 +242,28 @@ fun LoopWavePlayerApp(
         }
     }
 
+    val scanFolderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.addScanFolder(uri)
+        }
+    }
+
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // Top Bar: App Logo at top left, Search bar in middle, History & Settings buttons at top right
+                    // Top Bar: App Logo at top left, Search bar in middle, Sort & Settings buttons at top right
                     MainTopHeaderBar(
                         searchQuery = uiState.searchQuery,
                         onSearchQueryChange = viewModel::setSearchQuery,
-                        onOpenHistory = { showHistorySheet = true },
-                        onOpenSettings = { showSettingsSheet = true },
+                        sortOption = uiState.sortOption,
+                        sortDirection = uiState.sortDirection,
+                        onSelectSortOption = viewModel::setSortOption,
+                        onSelectSortDirection = viewModel::setSortDirection,
+                        onOpenSettings = { isSettingsOpen = true },
                         onOpenStudioPlayer = { isStudioPlayerOpen = true }
                     )
 
@@ -224,8 +307,10 @@ fun LoopWavePlayerApp(
                             onSelectSong = { song, playlistName, folderName ->
                                 viewModel.selectSong(song, playlistName = playlistName, folderName = folderName, autoPlay = true)
                             },
-                            onPlayFolder = viewModel::playFolder,
-                            onPlayPlaylist = viewModel::playPlaylist,
+                            onOpenFolder = viewModel::openFolderFromRecent,
+                            onPlayFolder = viewModel::playRecentFolderSession,
+                            onOpenPlaylist = viewModel::openPlaylistFromRecent,
+                            onPlayPlaylist = { pl -> viewModel.playRecentPlaylistSession(pl.id) },
                             onAddToPlaylistClick = { song -> songToAddToPlaylist = song },
                             onOpenStudioPlayer = { isStudioPlayerOpen = true }
                         )
@@ -241,7 +326,12 @@ fun LoopWavePlayerApp(
                             onToggleExpandFolder = viewModel::setExpandedFolder,
                             onAddToPlaylistClick = { song -> songToAddToPlaylist = song },
                             onOpenStudioPlayer = { isStudioPlayerOpen = true },
-                            onPlaySelectedSongs = viewModel::playSelectedSongs
+                            onPlaySelectedSongs = { selectedSongs, sourceFolderName ->
+                                viewModel.playSelectedSongs(
+                                    songs = selectedSongs,
+                                    sourceFolderName = sourceFolderName
+                                )
+                            }
                         )
                     }
 
@@ -253,7 +343,9 @@ fun LoopWavePlayerApp(
                             },
                             onAddToPlaylistClick = { song -> songToAddToPlaylist = song },
                             onOpenStudioPlayer = { isStudioPlayerOpen = true },
-                            onPlaySelectedSongs = viewModel::playSelectedSongs
+                            onPlaySelectedSongs = { selectedSongs ->
+                                viewModel.playSelectedSongs(songs = selectedSongs)
+                            }
                         )
                     }
 
@@ -270,7 +362,13 @@ fun LoopWavePlayerApp(
                             onDeletePlaylist = viewModel::deletePlaylist,
                             onToggleExpandPlaylist = viewModel::setExpandedPlaylist,
                             onOpenStudioPlayer = { isStudioPlayerOpen = true },
-                            onPlaySelectedSongs = viewModel::playSelectedSongs
+                            onPlaySelectedSongs = { selectedSongs, sourcePlaylistId, sourcePlaylistName ->
+                                viewModel.playSelectedSongs(
+                                    songs = selectedSongs,
+                                    sourcePlaylistId = sourcePlaylistId,
+                                    sourcePlaylistName = sourcePlaylistName
+                                )
+                            }
                         )
                     }
                 }
@@ -337,39 +435,30 @@ fun LoopWavePlayerApp(
                 }
             }
         }
-    }
-
-    // Settings Bottom Sheet
-    if (showSettingsSheet) {
-        SettingsBottomSheet(
-            uiState = uiState,
-            themeSetting = themeSetting,
-            onSelectThemeSetting = onSelectThemeSetting,
-            onSetVolumePercent = viewModel::setVolumePercent,
-            onOpenAbout = { showAboutDialog = true },
-            onDismiss = { showSettingsSheet = false }
-        )
+        // Full-Screen Settings Window
+        AnimatedVisibility(
+            visible = isSettingsOpen && !isStudioPlayerOpen,
+            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
+        ) {
+            SettingsScreen(
+                uiState = uiState,
+                themeSetting = themeSetting,
+                onSelectThemeSetting = onSelectThemeSetting,
+                onAddScanFolder = { scanFolderPickerLauncher.launch(null) },
+                onRemoveScanFolder = viewModel::removeScanFolder,
+                onRescanFolders = viewModel::rescanLibrary,
+                onResetAllDeviceScan = viewModel::clearScanFoldersResetToAllDevice,
+                onOpenAbout = { showAboutDialog = true },
+                onBack = { isSettingsOpen = false }
+            )
+        }
     }
 
     // About App Dialog (Shows app relations, GitHub source link & Donate button)
     if (showAboutDialog) {
         AboutAppDialog(
             onDismiss = { showAboutDialog = false }
-        )
-    }
-
-    // Playback History Bottom Sheet
-    if (showHistorySheet) {
-        PlaybackHistoryBottomSheet(
-            history = uiState.history,
-            onSelectHistorySong = { songId ->
-                val song = uiState.songs.find { it.id == songId }
-                if (song != null) {
-                    viewModel.selectSong(song, autoPlay = true)
-                }
-            },
-            onClearHistory = viewModel::clearPlaybackHistory,
-            onDismiss = { showHistorySheet = false }
         )
     }
 

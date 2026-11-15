@@ -16,8 +16,8 @@ android {
     applicationId = "io.github.kg6k.memorizer"
     minSdk = 23
     targetSdk = 36
-    versionCode = 5
-    versionName = "1.3"
+    versionCode = 6
+    versionName = "1.4"
 
     val isGitHubReleaseBuild = System.getenv("GITHUB_ACTIONS") == "true"
     buildConfigField("boolean", "INCLUDE_TEST_SONGS", (!isGitHubReleaseBuild).toString())
@@ -79,6 +79,7 @@ secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+  ignoreList.add("GITHUB_TOKEN")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
@@ -101,6 +102,7 @@ dependencies {
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.core.ktx)
+  implementation(libs.androidx.media)
   // implementation(libs.androidx.datastore.preferences)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)

@@ -85,6 +85,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -172,25 +173,32 @@ fun StudioPlayerScreen(
     val cfg = uiState.loopConfig
     val song = uiState.currentSong
 
+    val latestVolumePercent by rememberUpdatedState(uiState.volumePercent)
+    val latestOnSetVolumePercent by rememberUpdatedState(onSetVolumePercent)
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(uiState.isShowingEqualizer) {
                 if (!uiState.isShowingEqualizer) {
+                    var dragAccumulatorPx = 0f
                     detectVerticalDragGestures(
                         onDragStart = { offset ->
                             if (offset.x > size.width * 0.45f) {
                                 hideVolumeJob?.cancel()
+                                dragAccumulatorPx = 0f
                                 isVolumeGestureActive = true
                             }
                         },
                         onDragEnd = {
+                            dragAccumulatorPx = 0f
                             hideVolumeJob = coroutineScope.launch {
                                 delay(800)
                                 isVolumeGestureActive = false
                             }
                         },
                         onDragCancel = {
+                            dragAccumulatorPx = 0f
                             hideVolumeJob = coroutineScope.launch {
                                 delay(400)
                                 isVolumeGestureActive = false
@@ -201,11 +209,14 @@ fun StudioPlayerScreen(
                                 change.consume()
                                 hideVolumeJob?.cancel()
                                 isVolumeGestureActive = true
-                                val deltaPercent = (-dragAmount / 3.2f).toInt()
+                                val pxPerPercent = (size.height.toFloat() * 0.55f / 200f).coerceAtLeast(2.0f)
+                                dragAccumulatorPx += -dragAmount
+                                val deltaPercent = (dragAccumulatorPx / pxPerPercent).toInt()
                                 if (deltaPercent != 0) {
-                                    val newVol = (uiState.volumePercent + deltaPercent).coerceIn(0, 200)
-                                    if (newVol != uiState.volumePercent) {
-                                        onSetVolumePercent(newVol)
+                                    dragAccumulatorPx -= deltaPercent * pxPerPercent
+                                    val newVol = (latestVolumePercent + deltaPercent).coerceIn(0, 200)
+                                    if (newVol != latestVolumePercent) {
+                                        latestOnSetVolumePercent(newVol)
                                     }
                                 }
                             }
@@ -582,20 +593,23 @@ fun LineSlider(
     inactiveColor: Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f),
     thumbColor: Color = activeColor,
     trackThickness: Dp = 2.dp,
-    thumbRadius: Dp = 6.dp
+    thumbRadius: Dp = 6.dp,
+    touchHeight: Dp = 44.dp
 ) {
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
+    val latestRange by rememberUpdatedState(valueRange)
     val rangeSpan = (valueRange.endInclusive - valueRange.start).takeIf { it > 0f } ?: 1f
     val fraction = ((value - valueRange.start) / rangeSpan).coerceIn(0f, 1f)
 
     Box(
         modifier = modifier
-            .height(28.dp)
+            .height(touchHeight)
             .pointerInput(valueRange.start, valueRange.endInclusive) {
                 detectTapGestures { offset ->
                     val widthPx = size.width.toFloat().coerceAtLeast(1f)
                     val tapRatio = (offset.x / widthPx).coerceIn(0f, 1f)
-                    val newVal = valueRange.start + tapRatio * (valueRange.endInclusive - valueRange.start)
-                    onValueChange(newVal)
+                    val newVal = latestRange.start + tapRatio * (latestRange.endInclusive - latestRange.start)
+                    latestOnValueChange(newVal)
                 }
             }
             .pointerInput(valueRange.start, valueRange.endInclusive) {
@@ -603,15 +617,15 @@ fun LineSlider(
                     onDragStart = { offset ->
                         val widthPx = size.width.toFloat().coerceAtLeast(1f)
                         val dragRatio = (offset.x / widthPx).coerceIn(0f, 1f)
-                        val newVal = valueRange.start + dragRatio * (valueRange.endInclusive - valueRange.start)
-                        onValueChange(newVal)
+                        val newVal = latestRange.start + dragRatio * (latestRange.endInclusive - latestRange.start)
+                        latestOnValueChange(newVal)
                     },
                     onHorizontalDrag = { change, _ ->
                         change.consume()
                         val widthPx = size.width.toFloat().coerceAtLeast(1f)
                         val dragRatio = (change.position.x / widthPx).coerceIn(0f, 1f)
-                        val newVal = valueRange.start + dragRatio * (valueRange.endInclusive - valueRange.start)
-                        onValueChange(newVal)
+                        val newVal = latestRange.start + dragRatio * (latestRange.endInclusive - latestRange.start)
+                        latestOnValueChange(newVal)
                     }
                 )
             },
@@ -731,12 +745,12 @@ private fun SquareSongPictureAndEqualizerCard(
 
     Card(
         modifier = modifier
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { _, dragAmount ->
-                    if (dragAmount < -25f) {
-                        onSetShowEqualizer(true)
-                    } else if (dragAmount > 25f) {
-                        onSetShowEqualizer(false)
+            .pointerInput(isShowingEq) {
+                if (!isShowingEq) {
+                    detectHorizontalDragGestures { _, dragAmount ->
+                        if (dragAmount < -25f) {
+                            onSetShowEqualizer(true)
+                        }
                     }
                 }
             }
@@ -907,26 +921,34 @@ private fun SquareSongPictureAndEqualizerCard(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(28.dp),
+                            .height(40.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            imageVector = when {
-                                uiState.volumePercent == 0 -> Icons.Filled.VolumeMute
-                                uiState.volumePercent < 50 -> Icons.Filled.VolumeDown
-                                else -> Icons.Filled.VolumeUp
+                        IconButton(
+                            onClick = {
+                                onSetVolumePercent(if (uiState.volumePercent > 0) 0 else 100)
                             },
-                            contentDescription = "Volume",
-                            tint = volColor,
-                            modifier = Modifier.size(18.dp)
-                        )
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = when {
+                                    uiState.volumePercent == 0 -> Icons.Filled.VolumeMute
+                                    uiState.volumePercent < 50 -> Icons.Filled.VolumeDown
+                                    else -> Icons.Filled.VolumeUp
+                                },
+                                contentDescription = "Toggle mute",
+                                tint = volColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                         LineSlider(
                             value = uiState.volumePercent.toFloat(),
                             onValueChange = { onSetVolumePercent(it.roundToInt()) },
                             valueRange = 0f..200f,
                             activeColor = volColor,
                             thumbColor = volColor,
+                            touchHeight = 40.dp,
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("equalizer_volume_slider")
@@ -1295,15 +1317,15 @@ private fun VlcVolumeHudCard(volumePercent: Int) {
     val boostOrange = Color(0xFFFF9800)
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         color = Color(0xF0111827),
         shadowElevation = 14.dp,
         modifier = Modifier
-            .width(82.dp)
+            .width(58.dp)
             .testTag("vlc_volume_hud_overlay")
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 16.dp, horizontal = 10.dp),
+            modifier = Modifier.padding(vertical = 14.dp, horizontal = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -1315,14 +1337,14 @@ private fun VlcVolumeHudCard(volumePercent: Int) {
                 },
                 contentDescription = "Volume",
                 tint = if (isBoost) boostOrange else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(20.dp)
             )
 
             Box(
                 modifier = Modifier
-                    .width(14.dp)
-                    .height(110.dp)
-                    .clip(RoundedCornerShape(7.dp))
+                    .width(8.dp)
+                    .height(220.dp)
+                    .clip(RoundedCornerShape(4.dp))
                     .background(Color(0xFF334155))
             ) {
                 val fillRatio = (volumePercent / 200f).coerceIn(0f, 1f)
@@ -1331,14 +1353,14 @@ private fun VlcVolumeHudCard(volumePercent: Int) {
                         .fillMaxWidth()
                         .fillMaxHeight(fillRatio)
                         .align(Alignment.BottomCenter)
-                        .clip(RoundedCornerShape(7.dp))
+                        .clip(RoundedCornerShape(4.dp))
                         .background(if (isBoost) boostOrange else MaterialTheme.colorScheme.primary)
                 )
             }
 
             Text(
                 text = "$volumePercent%",
-                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = JetBrainsMonoFamily),
+                style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
                 fontWeight = FontWeight.Bold,
                 color = if (isBoost) boostOrange else Color.White,
                 maxLines = 1,

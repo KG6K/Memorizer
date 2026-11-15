@@ -25,12 +25,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -39,25 +42,18 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,34 +72,34 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.model.LocalSong
 import com.example.model.MainMenuTab
-import com.example.model.PlaybackHistoryItem
 import com.example.model.PlaybackPhase
 import com.example.model.Playlist
+import com.example.model.SortDirection
+import com.example.model.SortOption
 import com.example.player.PlayerUiState
 import com.example.player.formatDelayPreciseMillis
 import com.example.ui.theme.JetBrainsMonoFamily
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * Top App Bar containing:
  * - App Logo at top left corner
  * - Compact Search Bar right after the logo
- * - Playback History button
+ * - Global Sort button (Name, Date Added, Duration, Song Count + Asc/Desc)
  * - Settings button
  */
 @Composable
 fun MainTopHeaderBar(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    onOpenHistory: () -> Unit,
+    sortOption: SortOption,
+    sortDirection: SortDirection,
+    onSelectSortOption: (SortOption) -> Unit,
+    onSelectSortDirection: (SortDirection) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenStudioPlayer: () -> Unit,
-    modifier: Modifier = Modifier,
-    isDarkTheme: Boolean = true,
-    onToggleTheme: () -> Unit = {}
+    modifier: Modifier = Modifier
 ) {
+    var showSortMenu by remember { mutableStateOf(false) }
     Surface(
         color = MaterialTheme.colorScheme.background,
         modifier = modifier.fillMaxWidth()
@@ -199,22 +195,138 @@ fun MainTopHeaderBar(
                 }
             }
 
-            // 3. History button
-            Surface(
-                onClick = onOpenHistory,
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                modifier = Modifier
-                    .size(42.dp)
-                    .testTag("top_history_button")
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Filled.History,
-                        contentDescription = "Playback history",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
+            // 3. Global Sort button & DropdownMenu
+            Box {
+                Surface(
+                    onClick = { showSortMenu = true },
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    modifier = Modifier
+                        .size(42.dp)
+                        .testTag("top_sort_button")
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Sort,
+                            contentDescription = "Sort library",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = showSortMenu,
+                    onDismissRequest = { showSortMenu = false },
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.width(230.dp)
+                ) {
+                    Text(
+                        text = "Sort Order",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                     )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        SortDirection.entries.forEach { dir ->
+                            val isSelectedDir = sortDirection == dir
+                            Surface(
+                                onClick = {
+                                    onSelectSortDirection(dir)
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isSelectedDir) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(34.dp)
+                                    .testTag("sort_direction_${dir.name.lowercase()}")
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (dir == SortDirection.ASCENDING) {
+                                            Icons.Filled.ArrowUpward
+                                        } else {
+                                            Icons.Filled.ArrowDownward
+                                        },
+                                        contentDescription = dir.label,
+                                        tint = if (isSelectedDir) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = if (dir == SortDirection.ASCENDING) "Asc" else "Desc",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = if (isSelectedDir) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelectedDir) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                    )
+
+                    SortOption.entries.forEach { option ->
+                        val isSelectedOpt = sortOption == option
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = option.label,
+                                    fontWeight = if (isSelectedOpt) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelectedOpt) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                            },
+                            trailingIcon = {
+                                if (isSelectedOpt) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Check,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            onClick = {
+                                onSelectSortOption(option)
+                                showSortMenu = false
+                            },
+                            modifier = Modifier.testTag("sort_option_${option.name.lowercase()}")
+                        )
+                    }
                 }
             }
 
@@ -265,7 +377,7 @@ fun MainMenuTabsRow(
                 MainMenuTab.entries.forEach { tab ->
                     val isSelected = selectedTab == tab
                     val icon = when (tab) {
-                        MainMenuTab.RECENT -> Icons.Filled.History
+                        MainMenuTab.RECENT -> Icons.Filled.AccessTime
                         MainMenuTab.FOLDERS -> Icons.Filled.Folder
                         MainMenuTab.ALBUMS_SINGERS -> Icons.Filled.Album
                         MainMenuTab.PLAYLISTS -> Icons.AutoMirrored.Filled.QueueMusic
@@ -476,175 +588,6 @@ fun LastPlayingBottomBar(
                             contentDescription = "Next song",
                             modifier = Modifier.size(24.dp)
                         )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Bottom Sheet displaying Playback History
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PlaybackHistoryBottomSheet(
-    history: List<PlaybackHistoryItem>,
-    onSelectHistorySong: (String) -> Unit,
-    onClearHistory: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState()
-    val dateFormat = remember { SimpleDateFormat("h:mm a • MMM d", Locale.getDefault()) }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
-                .navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = CircleShape,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Filled.History,
-                                contentDescription = "Playback history",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                    Text(
-                        text = "Playback History (${history.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                if (history.isNotEmpty()) {
-                    TextButton(
-                        onClick = onClearHistory,
-                        modifier = Modifier.testTag("clear_history_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.DeleteSweep,
-                            contentDescription = "Clear all history",
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Clear All", maxLines = 1, softWrap = false)
-                    }
-                }
-            }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-
-            if (history.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No recent playback history yet.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 420.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp)
-                ) {
-                    items(history, key = { it.id }) { item ->
-                        Card(
-                            onClick = {
-                                onSelectHistorySong(item.songId)
-                                onDismiss()
-                            },
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-                            ),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("history_item_${item.id}")
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    shape = CircleShape,
-                                    modifier = Modifier.size(40.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Filled.PlayArrow,
-                                            contentDescription = "Play",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                                ) {
-                                    Text(
-                                        text = item.songTitle,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = "${item.artist} • ${dateFormat.format(Date(item.playedAt))}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = "Folder: ${item.folderName} • Playlist: ${item.playlistName}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.secondary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
             }
