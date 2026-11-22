@@ -1,7 +1,7 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -48,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -147,11 +149,42 @@ fun FoldersTabScreen(
             }
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        val listState = rememberLazyListState()
+        val fastScrollLabels = remember(folderGroups, songsByFolder, uiState.expandedFolder, normalizedQuery) {
+            if (folderGroups.isEmpty()) {
+                listOf(FastScrollLabel("Folders"))
+            } else {
+                buildList {
+                    folderGroups.forEachIndexed { folderIdx, folder ->
+                        add(FastScrollLabel(folder.name, "${folderIdx + 1}/${folderGroups.size}"))
+                        val songsInFolder = songsByFolder[folder.name] ?: emptyList()
+                        val isExpanded = if (normalizedQuery.isNotBlank()) {
+                            true
+                        } else {
+                            uiState.expandedFolder == folder.name
+                        }
+                        if (isExpanded) {
+                            songsInFolder.forEachIndexed { songIdx, song ->
+                                add(FastScrollLabel(song.title, "${songIdx + 1}/${songsInFolder.size}"))
+                            }
+                        }
+                    }
+                    add(lastOrNull() ?: FastScrollLabel("Folders"))
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
         ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
             if (folderGroups.isEmpty()) {
                 item(key = "empty_folders_card") {
                     Card(
@@ -241,6 +274,13 @@ fun FoldersTabScreen(
             item(key = "folders_bottom_spacer") {
                 Spacer(modifier = Modifier.height(16.dp))
             }
+            }
+
+            FastScrollBarOverlay(
+                listState = listState,
+                labels = fastScrollLabels,
+                testTagPrefix = "folders_fast_scroll"
+            )
         }
     }
 }
@@ -371,19 +411,18 @@ private fun FolderSongRowItem(
     val haptic = LocalHapticFeedback.current
     var showSongMenu by remember { mutableStateOf(false) }
 
-    Surface(
-        color = if (isSelected) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-        } else if (isCurrent) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-        },
-        border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
-        shape = RoundedCornerShape(12.dp),
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 10.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .then(
+                if (isSelected) {
+                    Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.32f))
+                } else {
+                    Modifier
+                }
+            )
             .testTag("folder_song_${song.id}")
             .combinedClickable(
                 onClick = {
@@ -402,14 +441,10 @@ private fun FolderSongRowItem(
                     }
                 }
             )
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
             if (isSelectionMode) {
                 SelectionCheckBadge(isSelected = isSelected)
             } else {
@@ -429,13 +464,18 @@ private fun FolderSongRowItem(
                     text = song.title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = "${song.artist} • ${formatDurationMillis(song.durationMs)}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isCurrent) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -503,6 +543,5 @@ private fun FolderSongRowItem(
                     )
                 }
             }
-        }
     }
 }

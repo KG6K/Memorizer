@@ -1,7 +1,7 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -54,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -155,11 +157,45 @@ fun PlaylistsTabScreen(
             }
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        val listState = rememberLazyListState()
+        val fastScrollLabels = remember(playlists, playlistSongsById, uiState.expandedPlaylistId, normalizedQuery) {
+            buildList {
+                add(FastScrollLabel("Playlists"))
+                add(FastScrollLabel("Your Playlists", "${playlists.size}"))
+                if (playlists.isEmpty()) {
+                    add(FastScrollLabel("No Playlists"))
+                } else {
+                    playlists.forEachIndexed { plIdx, playlist ->
+                        add(FastScrollLabel(playlist.name, "${plIdx + 1}/${playlists.size}"))
+                        val playlistSongs = playlistSongsById[playlist.id] ?: emptyList()
+                        val isExpanded = if (normalizedQuery.isNotBlank()) {
+                            true
+                        } else {
+                            uiState.expandedPlaylistId == playlist.id
+                        }
+                        if (isExpanded) {
+                            add(FastScrollLabel(playlist.name, "${playlistSongs.size}"))
+                            playlistSongs.forEachIndexed { songIdx, song ->
+                                add(FastScrollLabel(song.title, "${songIdx + 1}/${playlistSongs.size}"))
+                            }
+                        }
+                    }
+                }
+                add(lastOrNull() ?: FastScrollLabel("Playlists"))
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
         ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
             // Create Playlist Action Row
             item(key = "create_playlist_action_row") {
                 Button(
@@ -327,6 +363,13 @@ fun PlaylistsTabScreen(
             item(key = "playlists_bottom_spacer") {
                 Spacer(modifier = Modifier.height(16.dp))
             }
+            }
+
+            FastScrollBarOverlay(
+                listState = listState,
+                labels = fastScrollLabels,
+                testTagPrefix = "playlists_fast_scroll"
+            )
         }
 
         playlistForAddingSongs?.let { targetPlaylist ->
@@ -641,19 +684,18 @@ private fun PlaylistSongRowItem(
 ) {
     val haptic = LocalHapticFeedback.current
 
-    Surface(
-        color = if (isSelected) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-        } else if (isCurrent) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-        },
-        border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
-        shape = RoundedCornerShape(12.dp),
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 10.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .then(
+                if (isSelected) {
+                    Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.32f))
+                } else {
+                    Modifier
+                }
+            )
             .combinedClickable(
                 onClick = {
                     if (isSelectionMode) {
@@ -671,14 +713,10 @@ private fun PlaylistSongRowItem(
                     }
                 }
             )
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
             if (isSelectionMode) {
                 SelectionCheckBadge(isSelected = isSelected)
             } else {
@@ -698,13 +736,18 @@ private fun PlaylistSongRowItem(
                     text = song.title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = "${song.artist} • ${formatDurationMillis(song.durationMs)}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isCurrent) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -721,6 +764,5 @@ private fun PlaylistSongRowItem(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
     }
 }

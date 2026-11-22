@@ -62,10 +62,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -393,6 +396,7 @@ fun MainMenuTabsRow(
                         modifier = Modifier
                             .weight(1f)
                             .height(38.dp)
+                            .semantics { selected = isSelected }
                             .testTag("main_menu_tab_${tab.name.lowercase()}")
                     ) {
                         Row(
@@ -467,7 +471,7 @@ fun LastPlayingBottomBar(
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 8.dp,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        shape = RectangleShape,
         modifier = modifier
             .fillMaxWidth()
             .clickable { onOpenStudioPlayer() }

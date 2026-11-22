@@ -92,10 +92,15 @@ class MediaNotificationRobolectricTest {
         val intent = android.content.Intent(app, MainActivity::class.java).apply {
             putExtra(MainActivity.EXTRA_OPEN_STUDIO_PLAYER, true)
         }
-        val activity = Robolectric.buildActivity(MainActivity::class.java, intent).create().get()
-        assertNotNull(activity)
-        assertFalse(activity.intent.hasExtra(MainActivity.EXTRA_OPEN_STUDIO_PLAYER))
-        shadowOf(activity).let { }
+        val controller = Robolectric.buildActivity(MainActivity::class.java, intent).create()
+        try {
+            val activity = controller.get()
+            assertNotNull(activity)
+            assertFalse(activity.intent.hasExtra(MainActivity.EXTRA_OPEN_STUDIO_PLAYER))
+            shadowOf(activity).let { }
+        } finally {
+            controller.destroy()
+        }
     }
 
     @Test
@@ -181,6 +186,7 @@ class MediaNotificationRobolectricTest {
         assertEquals(null, actualNotif.getLargeIcon())
 
         controller.destroy()
+        engine.stopAndReleaseForTaskRemoved()
     }
 
     @Test

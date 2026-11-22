@@ -80,6 +80,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -160,10 +161,6 @@ fun StudioPlayerScreen(
     onClosePlayer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var isVolumeGestureActive by remember { mutableStateOf(false) }
-    var hideVolumeJob by remember { mutableStateOf<Job?>(null) }
-    val coroutineScope = rememberCoroutineScope()
-
     var showTopMenu by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRepeatDialog by remember { mutableStateOf(false) }
@@ -173,58 +170,7 @@ fun StudioPlayerScreen(
     val cfg = uiState.loopConfig
     val song = uiState.currentSong
 
-    val latestVolumePercent by rememberUpdatedState(uiState.volumePercent)
-    val latestOnSetVolumePercent by rememberUpdatedState(onSetVolumePercent)
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .pointerInput(uiState.isShowingEqualizer) {
-                if (!uiState.isShowingEqualizer) {
-                    var dragAccumulatorPx = 0f
-                    detectVerticalDragGestures(
-                        onDragStart = { offset ->
-                            if (offset.x > size.width * 0.45f) {
-                                hideVolumeJob?.cancel()
-                                dragAccumulatorPx = 0f
-                                isVolumeGestureActive = true
-                            }
-                        },
-                        onDragEnd = {
-                            dragAccumulatorPx = 0f
-                            hideVolumeJob = coroutineScope.launch {
-                                delay(800)
-                                isVolumeGestureActive = false
-                            }
-                        },
-                        onDragCancel = {
-                            dragAccumulatorPx = 0f
-                            hideVolumeJob = coroutineScope.launch {
-                                delay(400)
-                                isVolumeGestureActive = false
-                            }
-                        },
-                        onVerticalDrag = { change, dragAmount ->
-                            if (change.position.x > size.width * 0.45f) {
-                                change.consume()
-                                hideVolumeJob?.cancel()
-                                isVolumeGestureActive = true
-                                val pxPerPercent = (size.height.toFloat() * 0.55f / 200f).coerceAtLeast(2.0f)
-                                dragAccumulatorPx += -dragAmount
-                                val deltaPercent = (dragAccumulatorPx / pxPerPercent).toInt()
-                                if (deltaPercent != 0) {
-                                    dragAccumulatorPx -= deltaPercent * pxPerPercent
-                                    val newVol = (latestVolumePercent + deltaPercent).coerceIn(0, 200)
-                                    if (newVol != latestVolumePercent) {
-                                        latestOnSetVolumePercent(newVol)
-                                    }
-                                }
-                            }
-                        }
-                    )
-                }
-            }
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -529,18 +475,6 @@ fun StudioPlayerScreen(
                 )
             }
         }
-
-        // Floating Volume HUD Overlay that ONLY appears while swiping right side
-        AnimatedVisibility(
-            visible = isVolumeGestureActive,
-            enter = fadeIn() + scaleIn(initialScale = 0.85f),
-            exit = fadeOut() + scaleOut(targetScale = 0.85f),
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 20.dp)
-        ) {
-            VlcVolumeHudCard(volumePercent = uiState.volumePercent)
-        }
     }
 
     // Modal Dialogs
@@ -743,6 +677,19 @@ private fun SquareSongPictureAndEqualizerCard(
         }
     }
 
+    val coroutineScope = rememberCoroutineScope()
+    var isVolumeGestureActive by remember { mutableStateOf(false) }
+    var hideVolumeJob by remember { mutableStateOf<Job?>(null) }
+    val latestVolumePercent by rememberUpdatedState(uiState.volumePercent)
+    val latestOnSetVolumePercent by rememberUpdatedState(onSetVolumePercent)
+
+    LaunchedEffect(isShowingEq) {
+        if (isShowingEq) {
+            hideVolumeJob?.cancel()
+            isVolumeGestureActive = false
+        }
+    }
+
     Card(
         modifier = modifier
             .pointerInput(isShowingEq) {
@@ -752,6 +699,47 @@ private fun SquareSongPictureAndEqualizerCard(
                             onSetShowEqualizer(true)
                         }
                     }
+                }
+            }
+            .pointerInput(isShowingEq) {
+                if (!isShowingEq) {
+                    var dragAccumulatorPx = 0f
+                    detectVerticalDragGestures(
+                        onDragStart = {
+                            hideVolumeJob?.cancel()
+                            dragAccumulatorPx = 0f
+                            isVolumeGestureActive = true
+                        },
+                        onDragEnd = {
+                            dragAccumulatorPx = 0f
+                            hideVolumeJob = coroutineScope.launch {
+                                delay(800)
+                                isVolumeGestureActive = false
+                            }
+                        },
+                        onDragCancel = {
+                            dragAccumulatorPx = 0f
+                            hideVolumeJob = coroutineScope.launch {
+                                delay(400)
+                                isVolumeGestureActive = false
+                            }
+                        },
+                        onVerticalDrag = { change, dragAmount ->
+                            change.consume()
+                            hideVolumeJob?.cancel()
+                            isVolumeGestureActive = true
+                            val pxPerPercent = (size.height.toFloat() * 0.85f / 200f).coerceAtLeast(1.5f)
+                            dragAccumulatorPx += -dragAmount
+                            val deltaPercent = (dragAccumulatorPx / pxPerPercent).toInt()
+                            if (deltaPercent != 0) {
+                                dragAccumulatorPx -= deltaPercent * pxPerPercent
+                                val newVol = (latestVolumePercent + deltaPercent).coerceIn(0, 200)
+                                if (newVol != latestVolumePercent) {
+                                    latestOnSetVolumePercent(newVol)
+                                }
+                            }
+                        }
+                    )
                 }
             }
             .testTag("hero_now_playing_card"),
@@ -793,6 +781,22 @@ private fun SquareSongPictureAndEqualizerCard(
                             }
                         }
                     }
+                }
+
+                // Volume HUD Overlay aligned inside the right edge of the thumbnail, matching its height
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isVolumeGestureActive,
+                    enter = fadeIn() + scaleIn(initialScale = 0.92f),
+                    exit = fadeOut() + scaleOut(targetScale = 0.92f),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .padding(top = 12.dp, bottom = 12.dp, end = 12.dp)
+                ) {
+                    VlcVolumeHudCard(
+                        volumePercent = uiState.volumePercent,
+                        modifier = Modifier.fillMaxHeight()
+                    )
                 }
             } else {
                 // --- VIEW 2: 5-BAND VERTICAL LINE EQUALIZER + 200% SYSTEM-SYNCED LINE VOLUME SLIDER ---
@@ -1079,77 +1083,67 @@ private fun LooperQuickActionsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. Repeat Count Pill (Icon + Value only)
-        Surface(
-            onClick = onOpenRepeatDialog,
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+        // 1. Repeat Count (Completely borderless, box-free icon + value)
+        Row(
             modifier = Modifier
                 .weight(1f)
-                .height(44.dp)
-                .testTag("looper_repeat_pill")
+                .height(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onOpenRepeatDialog)
+                .padding(horizontal = 8.dp)
+                .testTag("looper_repeat_pill"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Repeat,
-                    contentDescription = "Repeat count",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = if (loopConfig.isInfinite) "∞" else "${loopConfig.repeatCount}x",
-                    style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFamily),
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Icon(
+                imageVector = Icons.Filled.Repeat,
+                contentDescription = "Repeat count",
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = if (loopConfig.isInfinite) "∞" else "${loopConfig.repeatCount}x",
+                style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFamily),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
         }
 
-        // 2. Delay Interval Pill (Pause between loops button)
-        Surface(
-            onClick = onOpenDelayDialog,
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+        // 2. Delay Interval (Completely borderless, box-free pause between loops button)
+        Row(
             modifier = Modifier
                 .weight(1f)
-                .height(44.dp)
-                .testTag("looper_delay_pill")
+                .height(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onOpenDelayDialog)
+                .padding(horizontal = 8.dp)
+                .testTag("looper_delay_pill"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Timer,
-                    contentDescription = "Delay interval",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.secondary
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = if (loopConfig.matchTrackDurationDelay) "Echo" else "${loopConfig.delaySeconds}s",
-                    style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFamily),
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Icon(
+                imageVector = Icons.Filled.Timer,
+                contentDescription = "Delay interval",
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.secondary
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = if (loopConfig.matchTrackDurationDelay) "Echo" else "${loopConfig.delaySeconds}s",
+                style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMonoFamily),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
         }
 
-        // 3. Loop Mode Pill (Icon only, matching other buttons without text or special color; white when not active)
+        // 3. Repeat Folder / Loop Mode (Completely borderless, box-free icon button)
         val nextMode = when (loopConfig.afterCompletionAction) {
             AfterLoopAction.NEXT_SONG -> AfterLoopAction.REPEAT_PLAYLIST
             AfterLoopAction.REPEAT_PLAYLIST -> AfterLoopAction.STOP
@@ -1161,28 +1155,27 @@ private fun LooperQuickActionsRow(
         } else {
             Icons.Filled.Repeat
         }
-        val iconTint = if (isLoopActive) MaterialTheme.colorScheme.primary else Color.White
+        val iconTint = if (isLoopActive) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
 
-        Surface(
-            onClick = { onSetAfterLoopAction(nextMode) },
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+        Box(
             modifier = Modifier
                 .weight(1f)
-                .height(44.dp)
-                .testTag("folder_loop_mode_button")
+                .height(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { onSetAfterLoopAction(nextMode) }
+                .testTag("folder_loop_mode_button"),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = modeIcon,
-                    contentDescription = loopConfig.afterCompletionAction.label,
-                    modifier = Modifier.size(20.dp),
-                    tint = iconTint
-                )
-            }
+            Icon(
+                imageVector = modeIcon,
+                contentDescription = loopConfig.afterCompletionAction.label,
+                modifier = Modifier.size(22.dp),
+                tint = iconTint
+            )
         }
     }
 }
@@ -1312,20 +1305,25 @@ private fun BottomTransportAndTimelineSection(
  * Floating volume overlay HUD (0% to 200%).
  */
 @Composable
-private fun VlcVolumeHudCard(volumePercent: Int) {
+private fun VlcVolumeHudCard(
+    volumePercent: Int,
+    modifier: Modifier = Modifier
+) {
     val isBoost = volumePercent > 100
     val boostOrange = Color(0xFFFF9800)
 
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = Color(0xF0111827),
-        shadowElevation = 14.dp,
-        modifier = Modifier
-            .width(58.dp)
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xE6111827),
+        shadowElevation = 10.dp,
+        modifier = modifier
+            .width(54.dp)
             .testTag("vlc_volume_hud_overlay")
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 14.dp, horizontal = 6.dp),
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(vertical = 12.dp, horizontal = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -1337,13 +1335,13 @@ private fun VlcVolumeHudCard(volumePercent: Int) {
                 },
                 contentDescription = "Volume",
                 tint = if (isBoost) boostOrange else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(18.dp)
             )
 
             Box(
                 modifier = Modifier
-                    .width(8.dp)
-                    .height(220.dp)
+                    .width(7.dp)
+                    .weight(1f)
                     .clip(RoundedCornerShape(4.dp))
                     .background(Color(0xFF334155))
             ) {
@@ -1360,7 +1358,7 @@ private fun VlcVolumeHudCard(volumePercent: Int) {
 
             Text(
                 text = "$volumePercent%",
-                style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMonoFamily),
+                style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
                 fontWeight = FontWeight.Bold,
                 color = if (isBoost) boostOrange else Color.White,
                 maxLines = 1,

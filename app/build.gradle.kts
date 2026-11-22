@@ -66,7 +66,12 @@ android {
     compose = true
     buildConfig = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      all { it.forkEvery = 1 }
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true

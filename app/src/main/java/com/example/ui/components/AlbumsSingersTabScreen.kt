@@ -1,7 +1,7 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -47,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -124,11 +126,41 @@ fun AlbumsSingersTabScreen(
             }
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        val listState = rememberLazyListState()
+        val fastScrollLabels = remember(sortedAlbumEntries, expandedItemKey, normalizedQuery) {
+            if (sortedAlbumEntries.isEmpty()) {
+                listOf(FastScrollLabel("Albums"))
+            } else {
+                buildList {
+                    sortedAlbumEntries.forEachIndexed { albumIdx, (albumName, songs) ->
+                        add(FastScrollLabel(albumName, "${albumIdx + 1}/${sortedAlbumEntries.size}"))
+                        val isExpanded = if (normalizedQuery.isNotBlank()) {
+                            true
+                        } else {
+                            expandedItemKey == "album_$albumName"
+                        }
+                        if (isExpanded) {
+                            songs.forEachIndexed { songIdx, song ->
+                                add(FastScrollLabel(song.title, "${songIdx + 1}/${songs.size}"))
+                            }
+                        }
+                    }
+                    add(lastOrNull() ?: FastScrollLabel("Albums"))
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
         ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
             if (sortedAlbumEntries.isEmpty()) {
                 item(key = "empty_albums_card") {
                     Card(
@@ -225,6 +257,13 @@ fun AlbumsSingersTabScreen(
             item(key = "albums_bottom_spacer") {
                 Spacer(modifier = Modifier.height(16.dp))
             }
+            }
+
+            FastScrollBarOverlay(
+                listState = listState,
+                labels = fastScrollLabels,
+                testTagPrefix = "albums_fast_scroll"
+            )
         }
     }
 }
@@ -348,19 +387,18 @@ private fun AlbumSongRowItem(
     val haptic = LocalHapticFeedback.current
     var showSongMenu by remember { mutableStateOf(false) }
 
-    Surface(
-        color = if (isSelected) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-        } else if (isCurrent) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-        },
-        border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
-        shape = RoundedCornerShape(12.dp),
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 10.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .then(
+                if (isSelected) {
+                    Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.32f))
+                } else {
+                    Modifier
+                }
+            )
             .combinedClickable(
                 onClick = {
                     if (isSelectionMode) {
@@ -378,14 +416,10 @@ private fun AlbumSongRowItem(
                     }
                 }
             )
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
             if (isSelectionMode) {
                 SelectionCheckBadge(isSelected = isSelected)
             } else {
@@ -405,13 +439,18 @@ private fun AlbumSongRowItem(
                     text = song.title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = formatDurationMillis(song.durationMs),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isCurrent) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -461,6 +500,5 @@ private fun AlbumSongRowItem(
                     )
                 }
             }
-        }
     }
 }

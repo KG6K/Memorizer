@@ -61,14 +61,10 @@ import com.example.model.MainMenuTab
 import com.example.player.LoopAudioPlayerViewModel
 import com.example.ui.components.AboutAppDialog
 import com.example.ui.components.AddToPlaylistDialog
-import com.example.ui.components.AlbumsSingersTabScreen
 import com.example.ui.components.CreatePlaylistDialog
-import com.example.ui.components.FoldersTabScreen
 import com.example.ui.components.LastPlayingBottomBar
-import com.example.ui.components.MainMenuTabsRow
+import com.example.ui.components.LibraryTabsPager
 import com.example.ui.components.MainTopHeaderBar
-import com.example.ui.components.PlaylistsTabScreen
-import com.example.ui.components.RecentTabScreen
 import com.example.ui.components.SettingsScreen
 import com.example.ui.components.StudioPlayerScreen
 import com.example.ui.theme.AppThemeSetting
@@ -254,26 +250,17 @@ fun LoopWavePlayerApp(
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    // Top Bar: App Logo at top left, Search bar in middle, Sort & Settings buttons at top right
-                    MainTopHeaderBar(
-                        searchQuery = uiState.searchQuery,
-                        onSearchQueryChange = viewModel::setSearchQuery,
-                        sortOption = uiState.sortOption,
-                        sortDirection = uiState.sortDirection,
-                        onSelectSortOption = viewModel::setSortOption,
-                        onSelectSortDirection = viewModel::setSortDirection,
-                        onOpenSettings = { isSettingsOpen = true },
-                        onOpenStudioPlayer = { isStudioPlayerOpen = true }
-                    )
-
-                    // Menu Row below the top bar:
-                    // 1st: Recent, 2nd: Folders, 3rd: Albums, 4th: Playlists
-                    MainMenuTabsRow(
-                        selectedTab = uiState.selectedTab,
-                        onTabSelected = viewModel::setSelectedTab
-                    )
-                }
+                // Top Bar: App Logo at top left, Search bar in middle, Sort & Settings buttons at top right
+                MainTopHeaderBar(
+                    searchQuery = uiState.searchQuery,
+                    onSearchQueryChange = viewModel::setSearchQuery,
+                    sortOption = uiState.sortOption,
+                    sortDirection = uiState.sortDirection,
+                    onSelectSortOption = viewModel::setSortOption,
+                    onSelectSortDirection = viewModel::setSortDirection,
+                    onOpenSettings = { isSettingsOpen = true },
+                    onOpenStudioPlayer = { isStudioPlayerOpen = true }
+                )
             },
             bottomBar = {
                 // Bottom Bar: Last playing song, playlist, and folder
@@ -287,7 +274,47 @@ fun LoopWavePlayerApp(
                 }
             }
         ) { innerPadding ->
-            Column(
+            LibraryTabsPager(
+                uiState = uiState,
+                onSelectTab = viewModel::setSelectedTab,
+                onSelectSong = { song, playlistName, folderName ->
+                    viewModel.selectSong(
+                        song,
+                        playlistName = playlistName,
+                        folderName = folderName,
+                        autoPlay = true
+                    )
+                },
+                onOpenFolderFromRecent = viewModel::openFolderFromRecent,
+                onPlayRecentFolderSession = viewModel::playRecentFolderSession,
+                onOpenPlaylistFromRecent = viewModel::openPlaylistFromRecent,
+                onPlayRecentPlaylistSession = { pl -> viewModel.playRecentPlaylistSession(pl.id) },
+                onPlayFolder = viewModel::playFolder,
+                onToggleExpandFolder = viewModel::setExpandedFolder,
+                onPlaySelectedFolderSongs = { selectedSongs, sourceFolderName ->
+                    viewModel.playSelectedSongs(
+                        songs = selectedSongs,
+                        sourceFolderName = sourceFolderName
+                    )
+                },
+                onPlaySelectedAlbumSongs = { selectedSongs ->
+                    viewModel.playSelectedSongs(songs = selectedSongs)
+                },
+                onPlayPlaylist = viewModel::playPlaylist,
+                onCreatePlaylistClick = { showCreatePlaylistDialog = true },
+                onAddSongsToPlaylist = viewModel::addSongsToPlaylist,
+                onRemoveSongFromPlaylist = viewModel::removeSongFromPlaylist,
+                onDeletePlaylist = viewModel::deletePlaylist,
+                onToggleExpandPlaylist = viewModel::setExpandedPlaylist,
+                onPlaySelectedPlaylistSongs = { selectedSongs, sourcePlaylistId, sourcePlaylistName ->
+                    viewModel.playSelectedSongs(
+                        songs = selectedSongs,
+                        sourcePlaylistId = sourcePlaylistId,
+                        sourcePlaylistName = sourcePlaylistName
+                    )
+                },
+                onAddToPlaylistClick = { song -> songToAddToPlaylist = song },
+                onOpenStudioPlayer = { isStudioPlayerOpen = true },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
@@ -298,81 +325,7 @@ fun LoopWavePlayerApp(
                             Modifier
                         }
                     )
-            ) {
-                // Active Menu Tab View
-                when (uiState.selectedTab) {
-                    MainMenuTab.RECENT -> {
-                        RecentTabScreen(
-                            uiState = uiState,
-                            onSelectSong = { song, playlistName, folderName ->
-                                viewModel.selectSong(song, playlistName = playlistName, folderName = folderName, autoPlay = true)
-                            },
-                            onOpenFolder = viewModel::openFolderFromRecent,
-                            onPlayFolder = viewModel::playRecentFolderSession,
-                            onOpenPlaylist = viewModel::openPlaylistFromRecent,
-                            onPlayPlaylist = { pl -> viewModel.playRecentPlaylistSession(pl.id) },
-                            onAddToPlaylistClick = { song -> songToAddToPlaylist = song },
-                            onOpenStudioPlayer = { isStudioPlayerOpen = true }
-                        )
-                    }
-
-                    MainMenuTab.FOLDERS -> {
-                        FoldersTabScreen(
-                            uiState = uiState,
-                            onSelectSong = { song, playlistName, folderName ->
-                                viewModel.selectSong(song, playlistName = playlistName, folderName = folderName, autoPlay = true)
-                            },
-                            onPlayFolder = viewModel::playFolder,
-                            onToggleExpandFolder = viewModel::setExpandedFolder,
-                            onAddToPlaylistClick = { song -> songToAddToPlaylist = song },
-                            onOpenStudioPlayer = { isStudioPlayerOpen = true },
-                            onPlaySelectedSongs = { selectedSongs, sourceFolderName ->
-                                viewModel.playSelectedSongs(
-                                    songs = selectedSongs,
-                                    sourceFolderName = sourceFolderName
-                                )
-                            }
-                        )
-                    }
-
-                    MainMenuTab.ALBUMS_SINGERS -> {
-                        AlbumsSingersTabScreen(
-                            uiState = uiState,
-                            onSelectSong = { song, playlistName, folderName ->
-                                viewModel.selectSong(song, playlistName = playlistName, folderName = folderName, autoPlay = true)
-                            },
-                            onAddToPlaylistClick = { song -> songToAddToPlaylist = song },
-                            onOpenStudioPlayer = { isStudioPlayerOpen = true },
-                            onPlaySelectedSongs = { selectedSongs ->
-                                viewModel.playSelectedSongs(songs = selectedSongs)
-                            }
-                        )
-                    }
-
-                    MainMenuTab.PLAYLISTS -> {
-                        PlaylistsTabScreen(
-                            uiState = uiState,
-                            onSelectSong = { song, playlistName, folderName ->
-                                viewModel.selectSong(song, playlistName = playlistName, folderName = folderName, autoPlay = true)
-                            },
-                            onPlayPlaylist = viewModel::playPlaylist,
-                            onCreatePlaylistClick = { showCreatePlaylistDialog = true },
-                            onAddSongsToPlaylist = viewModel::addSongsToPlaylist,
-                            onRemoveSongFromPlaylist = viewModel::removeSongFromPlaylist,
-                            onDeletePlaylist = viewModel::deletePlaylist,
-                            onToggleExpandPlaylist = viewModel::setExpandedPlaylist,
-                            onOpenStudioPlayer = { isStudioPlayerOpen = true },
-                            onPlaySelectedSongs = { selectedSongs, sourcePlaylistId, sourcePlaylistName ->
-                                viewModel.playSelectedSongs(
-                                    songs = selectedSongs,
-                                    sourcePlaylistId = sourcePlaylistId,
-                                    sourcePlaylistName = sourcePlaylistName
-                                )
-                            }
-                        )
-                    }
-                }
-            }
+            )
         }
 
         // Full Studio Player Sheet (Advanced Memorization Looper: repeat count, delay countdown, echo mode, A-B markers, speed)

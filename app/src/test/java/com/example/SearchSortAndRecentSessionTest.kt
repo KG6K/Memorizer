@@ -199,63 +199,67 @@ class SearchSortAndRecentSessionTest {
         repo.saveSongs(allSongs)
 
         val engine = AudioPlaybackEngine.getInstance(app)
-        // Allow AudioPlaybackEngine's initial async load on IO -> Main to finish
-        val deadline = System.currentTimeMillis() + 3000L
-        while (engine.uiState.value.songs.isEmpty() && System.currentTimeMillis() < deadline) {
+        try {
+            // Allow AudioPlaybackEngine's initial async load on IO -> Main to finish
+            val deadline = System.currentTimeMillis() + 3000L
+            while (engine.uiState.value.songs.isEmpty() && System.currentTimeMillis() < deadline) {
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                Thread.sleep(25L)
+            }
             org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
-            Thread.sleep(25L)
+
+            val songsCtoF = songsAtoF.subList(2, 6)
+            engine.playSelectedSongs(songs = songsCtoF, sourceFolderName = "PracticeFolder")
+            engine.setRepeatCount(9)
+            engine.setDelaySeconds(2)
+
+            val folderSession = engine.uiState.value.recentSessions.firstOrNull { it.key == "folder:PracticeFolder" }
+            assertNotNull(folderSession)
+            assertTrue(folderSession!!.isSubSelection)
+            assertEquals(listOf("song_c", "song_d", "song_e", "song_f"), folderSession.songIds)
+            assertEquals(9, folderSession.loopConfig.repeatCount)
+            assertEquals(2, folderSession.loopConfig.delaySeconds)
+
+            engine.openFolderFromRecent("PracticeFolder")
+            assertEquals(MainMenuTab.FOLDERS, engine.uiState.value.selectedTab)
+            assertEquals("PracticeFolder", engine.uiState.value.expandedFolder)
+
+            // Switch away to a standalone song and mutate loop config, then resume Recent folder session
+            engine.selectSong(otherSong, autoPlay = false)
+            engine.setRepeatCount(1)
+            engine.setDelaySeconds(0)
+            assertEquals(1, engine.uiState.value.loopConfig.repeatCount)
+
+            engine.playRecentFolderSession("PracticeFolder")
+            assertEquals(listOf("song_c", "song_d", "song_e", "song_f"), engine.uiState.value.customPlaybackQueue.map { it.id })
+            assertEquals(9, engine.uiState.value.loopConfig.repeatCount)
+            assertEquals(2, engine.uiState.value.loopConfig.delaySeconds)
+
+            // Verify same behavior for a Playlist C-to-F sub-selection
+            engine.createPlaylist("Hifz List", initialSongIds = songsAtoF.map { it.id })
+            val createdPl = engine.uiState.value.playlists.first { it.name == "Hifz List" }
+            engine.playSelectedSongs(
+                songs = songsCtoF,
+                sourcePlaylistId = createdPl.id,
+                sourcePlaylistName = createdPl.name
+            )
+            engine.setRepeatCount(5)
+            engine.setDelaySeconds(4)
+
+            engine.selectSong(otherSong, autoPlay = false)
+            engine.setRepeatCount(2)
+            engine.setDelaySeconds(1)
+
+            engine.playRecentPlaylistSession(createdPl.id)
+            assertEquals(listOf("song_c", "song_d", "song_e", "song_f"), engine.uiState.value.customPlaybackQueue.map { it.id })
+            assertEquals(5, engine.uiState.value.loopConfig.repeatCount)
+            assertEquals(4, engine.uiState.value.loopConfig.delaySeconds)
+
+            engine.openPlaylistFromRecent(createdPl.id)
+            assertEquals(MainMenuTab.PLAYLISTS, engine.uiState.value.selectedTab)
+            assertEquals(createdPl.id, engine.uiState.value.expandedPlaylistId)
+        } finally {
+            engine.stopAndReleaseForTaskRemoved()
         }
-        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
-
-        val songsCtoF = songsAtoF.subList(2, 6)
-        engine.playSelectedSongs(songs = songsCtoF, sourceFolderName = "PracticeFolder")
-        engine.setRepeatCount(9)
-        engine.setDelaySeconds(2)
-
-        val folderSession = engine.uiState.value.recentSessions.firstOrNull { it.key == "folder:PracticeFolder" }
-        assertNotNull(folderSession)
-        assertTrue(folderSession!!.isSubSelection)
-        assertEquals(listOf("song_c", "song_d", "song_e", "song_f"), folderSession.songIds)
-        assertEquals(9, folderSession.loopConfig.repeatCount)
-        assertEquals(2, folderSession.loopConfig.delaySeconds)
-
-        engine.openFolderFromRecent("PracticeFolder")
-        assertEquals(MainMenuTab.FOLDERS, engine.uiState.value.selectedTab)
-        assertEquals("PracticeFolder", engine.uiState.value.expandedFolder)
-
-        // Switch away to a standalone song and mutate loop config, then resume Recent folder session
-        engine.selectSong(otherSong, autoPlay = false)
-        engine.setRepeatCount(1)
-        engine.setDelaySeconds(0)
-        assertEquals(1, engine.uiState.value.loopConfig.repeatCount)
-
-        engine.playRecentFolderSession("PracticeFolder")
-        assertEquals(listOf("song_c", "song_d", "song_e", "song_f"), engine.uiState.value.customPlaybackQueue.map { it.id })
-        assertEquals(9, engine.uiState.value.loopConfig.repeatCount)
-        assertEquals(2, engine.uiState.value.loopConfig.delaySeconds)
-
-        // Verify same behavior for a Playlist C-to-F sub-selection
-        engine.createPlaylist("Hifz List", initialSongIds = songsAtoF.map { it.id })
-        val createdPl = engine.uiState.value.playlists.first { it.name == "Hifz List" }
-        engine.playSelectedSongs(
-            songs = songsCtoF,
-            sourcePlaylistId = createdPl.id,
-            sourcePlaylistName = createdPl.name
-        )
-        engine.setRepeatCount(5)
-        engine.setDelaySeconds(4)
-
-        engine.selectSong(otherSong, autoPlay = false)
-        engine.setRepeatCount(2)
-        engine.setDelaySeconds(1)
-
-        engine.playRecentPlaylistSession(createdPl.id)
-        assertEquals(listOf("song_c", "song_d", "song_e", "song_f"), engine.uiState.value.customPlaybackQueue.map { it.id })
-        assertEquals(5, engine.uiState.value.loopConfig.repeatCount)
-        assertEquals(4, engine.uiState.value.loopConfig.delaySeconds)
-
-        engine.openPlaylistFromRecent(createdPl.id)
-        assertEquals(MainMenuTab.PLAYLISTS, engine.uiState.value.selectedTab)
-        assertEquals(createdPl.id, engine.uiState.value.expandedPlaylistId)
     }
 }

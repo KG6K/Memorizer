@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -166,13 +169,34 @@ fun RecentTabScreen(
         }
     }
 
-    LazyColumn(
+    val listState = rememberLazyListState()
+    val fastScrollLabels = remember(normalizedQuery, recentFolders, recentPlaylists, recentSongs) {
+        if (normalizedQuery.isNotBlank() && recentFolders.isEmpty() && recentPlaylists.isEmpty() && recentSongs.isEmpty()) {
+            listOf(FastScrollLabel("No results"))
+        } else {
+            buildList {
+                add(FastScrollLabel("Recent Folders"))
+                add(FastScrollLabel("Recent Playlists"))
+                add(FastScrollLabel("Recent Songs", "${recentSongs.size}"))
+                recentSongs.forEachIndexed { index, song ->
+                    add(FastScrollLabel(song.title, "${index + 1}/${recentSongs.size}"))
+                }
+                add(FastScrollLabel(recentSongs.lastOrNull()?.title ?: "Recent"))
+            }
+        }
+    }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .testTag("recent_tab_screen"),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .testTag("recent_tab_screen")
     ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
         if (normalizedQuery.isNotBlank() && recentFolders.isEmpty() && recentPlaylists.isEmpty() && recentSongs.isEmpty()) {
             item(key = "recent_empty_search_card") {
                 Card(
@@ -362,6 +386,13 @@ fun RecentTabScreen(
         item(key = "recent_bottom_spacer") {
             Spacer(modifier = Modifier.height(16.dp))
         }
+        }
+
+        FastScrollBarOverlay(
+            listState = listState,
+            labels = fastScrollLabels,
+            testTagPrefix = "recent_fast_scroll"
+        )
     }
 }
 
@@ -461,17 +492,6 @@ private fun RecentFolderCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-
-            if (session != null) {
-                Text(
-                    text = session.loopConfig.formatSummary(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
     }
 }
@@ -575,17 +595,6 @@ private fun RecentPlaylistCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-
-            if (session != null) {
-                Text(
-                    text = session.loopConfig.formatSummary(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
     }
 }
@@ -601,59 +610,36 @@ private fun RecentSongItemCard(
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
-    Card(
-        onClick = onSelect,
+    Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onSelect)
+            .padding(horizontal = 4.dp, vertical = 10.dp)
             .testTag("recent_song_card_${song.id}"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isCurrent) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
-            }
-        )
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Surface(
-                color = if (isCurrent) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
+            Icon(
+                imageVector = when {
+                    isPlaying -> Icons.Filled.GraphicEq
+                    isCurrent -> Icons.Filled.PlayArrow
+                    else -> Icons.Filled.AudioFile
                 },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.size(44.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = when {
-                            isPlaying -> Icons.Filled.GraphicEq
-                            isCurrent -> Icons.Filled.PlayArrow
-                            else -> Icons.Filled.AudioFile
-                        },
-                        contentDescription = "Song status",
-                        tint = if (isCurrent) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
+                contentDescription = "Song status",
+                tint = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
+            )
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = song.title,
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
-                    color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -668,7 +654,7 @@ private fun RecentSongItemCard(
                     text = metaText,
                     style = MaterialTheme.typography.bodySmall,
                     color = if (isCurrent) {
-                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
@@ -721,6 +707,5 @@ private fun RecentSongItemCard(
                     )
                 }
             }
-        }
     }
 }
